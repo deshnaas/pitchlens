@@ -286,6 +286,256 @@ function SpotlightOverlay({ step }: { step: number }) {
   );
 }
 
+// ── Story overlay system ──────────────────────────────────────────────────────
+//
+// Cards are positioned absolutely in the PITCH CONTAINER (not inside the camera
+// wrapper). This means they stay at a constant viewport position while the
+// camera zooms, which is exactly how broadcast overlays work.
+//
+// As the camera zooms RIGHT toward the offside zone, the left side of the
+// pitch container becomes dark (pitch content scrolls away) — creating a
+// natural, uncluttered caption zone. Step 0 uses the upper-left of the full
+// pitch; later steps use the same left zone which is now dark + readable.
+
+interface StoryCardData {
+  // Position in the pitch container (% — NOT pitch metres, NOT camera-relative)
+  left: string;
+  top : string;
+  // Content
+  eyebrow : string;
+  headline: string;
+  body?   : string;
+  // Visual
+  accent?  : string;   // override color for headline + line
+  size?    : "sm" | "md" | "lg";
+}
+
+// Positions are tuned for the 3-column layout.
+// Left side becomes dark caption zone as camera zooms right from step 1 onward.
+const STORY_CARDS: StoryCardData[] = [
+  {  // Step 0 — Incident detected, full pitch visible
+    left: "6%", top: "16%",
+    eyebrow : `72′  ·  Incident Detected`,
+    headline: "Through Ball to Havertz",
+    body    : "Müller plays a through ball behind the defensive line. Havertz runs onto the pass. The assistant referee raises their flag.",
+    size    : "md",
+  },
+  {  // Step 1 — Evidence: pass traced (ball area is center-left, camera pushes right)
+    left: "6%", top: "58%",
+    eyebrow : "Critical Frame",
+    headline: "Moment of Pass",
+    body    : "Offside is judged at the exact moment the ball leaves the passer's foot. Every position is frozen at this frame.",
+    size    : "sm",
+  },
+  {  // Step 2 — Law: camera on right half, left is now a dark zone
+    left: "6%", top: "22%",
+    eyebrow : "Law 11  ·  Havertz Position",
+    headline: "Beyond the Line",
+    body    : "The attacker appears ahead of the second-last defender. Under Law 11, any part of the body that can score must be onside.",
+    size    : "sm",
+  },
+  {  // Step 3 — Analysis: measurement, camera zoomed into offside zone
+    left: "6%", top: "20%",
+    eyebrow : "Position Difference",
+    headline: "Margin: 3.0m",
+    body    : "Havertz at 91.0m  ·  Silva at 88.0m.\nThe attacker is clearly beyond the legal position.",
+    accent  : "rgba(255,200,80,0.9)",
+    size    : "md",
+  },
+  {  // Step 4 — Verdict: most zoomed, left zone is clear dark space for the decision
+    left: "6%", top: "16%",
+    eyebrow : "VAR Decision  ·  Confidence 96%",
+    headline: "OFFSIDE CONFIRMED",
+    body    : "VAR confirms the assistant referee's original decision. Indirect free kick awarded to Brazil.",
+    accent  : "rgba(220,80,80,0.95)",
+    size    : "lg",
+  },
+];
+
+// ── StoryCard — broadcast-style pitch overlay ─────────────────────────────────
+
+function StoryCard({
+  data, stepKey, visible,
+}: {
+  data   : StoryCardData;
+  stepKey: number;
+  visible: boolean;
+}) {
+  const accentColor = data.accent ?? "rgba(168,196,224,0.72)";
+  const isLg = data.size === "lg";
+  const isSm = data.size === "sm";
+
+  return (
+    <AnimatePresence mode="wait">
+      {visible && (
+        <motion.div
+          key={`sc-${stepKey}`}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10, transition: { duration: 0.4, ease: "easeIn" } }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.45 }}
+          style={{
+            position      : "absolute",
+            left          : data.left,
+            top           : data.top,
+            zIndex        : 18,
+            pointerEvents : "none",
+            maxWidth      : isLg ? "220px" : isSm ? "172px" : "196px",
+          }}
+        >
+          {/* Dark halo behind text — legibility on any pitch colour */}
+          <div style={{
+            position  : "absolute",
+            inset     : "-18px -24px",
+            background: "radial-gradient(ellipse at 30% 40%, rgba(0,3,18,0.55) 0%, transparent 72%)",
+            zIndex    : -1,
+          }} />
+
+          {/* Eyebrow */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.55, duration: 0.5 }}
+            style={{
+              fontSize     : "0.33rem",
+              letterSpacing: "0.42em",
+              color        : accentColor,
+              textTransform: "uppercase",
+              fontWeight   : 300,
+              marginBottom : "9px",
+              opacity      : 0.72,
+            }}
+          >
+            {data.eyebrow}
+          </motion.div>
+
+          {/* Accent line — draws itself left-to-right */}
+          <motion.div
+            initial={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: 1, opacity: 1 }}
+            transition={{ duration: 0.55, delay: 0.62, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              width          : isLg ? "28px" : "20px",
+              height         : "1px",
+              background     : accentColor,
+              marginBottom   : "11px",
+              transformOrigin: "left",
+            }}
+          />
+
+          {/* Headline */}
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.65, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              fontSize     : isLg ? "clamp(0.9rem, 1.9vw, 1.22rem)" : isSm ? "0.72rem" : "0.82rem",
+              letterSpacing: isLg ? "0.14em" : "0.04em",
+              color        : isLg ? (data.accent ?? "rgba(255,255,255,0.95)") : "rgba(255,255,255,0.92)",
+              fontWeight   : isLg ? 200 : 300,
+              lineHeight   : 1.18,
+              textTransform: isLg ? "uppercase" : "none",
+              marginBottom : data.body ? "11px" : 0,
+            }}
+          >
+            {data.headline}
+          </motion.div>
+
+          {/* Body */}
+          {data.body && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.7, delay: 1.05 }}
+              style={{
+                fontSize     : "0.48rem",
+                letterSpacing: "0.025em",
+                color        : "rgba(255,255,255,0.38)",
+                lineHeight   : 1.78,
+                fontWeight   : 300,
+                margin       : 0,
+                whiteSpace   : "pre-line",
+              }}
+            >
+              {data.body}
+            </motion.p>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ── AssistantPitchCard — VAR assistant response as pitch overlay ──────────────
+// Appears bottom-left of the pitch container when the assistant responds.
+// Clears automatically after 7 s or on next user message.
+
+function AssistantPitchCard({ text, accent }: { text: string; accent: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 6, transition: { duration: 0.5 } }}
+      transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        position     : "absolute",
+        left         : "6%",
+        bottom       : "16%",
+        zIndex       : 22,
+        pointerEvents: "none",
+        maxWidth     : "200px",
+      }}
+    >
+      {/* Dark halo */}
+      <div style={{
+        position  : "absolute",
+        inset     : "-14px -20px",
+        background: "radial-gradient(ellipse at 30% 60%, rgba(0,3,18,0.62) 0%, transparent 72%)",
+        zIndex    : -1,
+      }} />
+
+      {/* VAR tag */}
+      <div style={{
+        display      : "flex",
+        alignItems   : "center",
+        gap          : "6px",
+        fontSize     : "0.32rem",
+        letterSpacing: "0.4em",
+        color        : `rgba(${accent},0.5)`,
+        textTransform: "uppercase",
+        fontWeight   : 300,
+        marginBottom : "8px",
+      }}>
+        <motion.div
+          animate={{ opacity: [0.4, 1, 0.4] }}
+          transition={{ duration: 1.4, repeat: Infinity }}
+          style={{ width: 4, height: 4, borderRadius: "50%", background: `rgba(${accent},0.7)` }}
+        />
+        VAR Response
+      </div>
+
+      {/* Line */}
+      <motion.div
+        initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+        transition={{ duration: 0.4, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+        style={{ width: "18px", height: "1px", background: `rgba(${accent},0.4)`, marginBottom: "9px", transformOrigin: "left" }}
+      />
+
+      {/* Text */}
+      <p style={{
+        fontSize     : "0.54rem",
+        letterSpacing: "0.022em",
+        color        : `rgba(${accent},0.82)`,
+        lineHeight   : 1.72,
+        fontWeight   : 300,
+        margin       : 0,
+      }}>
+        {text}
+      </p>
+    </motion.div>
+  );
+}
+
 // ── Chat types ────────────────────────────────────────────────────────────────
 
 interface ChatMessage {
@@ -321,6 +571,9 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
   const [inputValue,          setInputValue]          = useState("");
   const [isLoading,           setIsLoading]           = useState(false);
   const [assistantHighlights, setAssistantHighlights] = useState<string[]>([]);
+  // Pitch overlay from VAR assistant responses
+  const [assistantCard,       setAssistantCard]       = useState<string | null>(null);
+  const assistantCardTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── Intro sequence ──────────────────────────────────────────────────────────
   // "hold" → players appear, pitch is dark
@@ -399,6 +652,9 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     if (!msg || isLoading) return;
     setInputValue("");
     setAssistantHighlights([]);
+    // Clear previous assistant pitch card
+    setAssistantCard(null);
+    clearTimeout(assistantCardTimer.current);
     setMessages(prev => [...prev, { role: "user", text: msg, timestamp: Date.now() }]);
     setIsLoading(true);
     try {
@@ -414,6 +670,9 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
         stepRef  : data.action?.type === "goToStep" ? (data.action.value ?? undefined) : undefined,
         timestamp: Date.now(),
       }]);
+      // Show response as a pitch overlay card too
+      setAssistantCard(data.text);
+      assistantCardTimer.current = setTimeout(() => setAssistantCard(null), 7000);
       applyAction(data.action);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", text: "Analysis feed interrupted. Review the timeline manually.", timestamp: Date.now() }]);
@@ -618,6 +877,26 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
               {introPhase === "active" && <SpotlightOverlay step={step} />}
             </SVGPitch>
           </motion.div>
+
+          {/* ── STORY CARD — pitch storytelling overlay (left caption zone) ── */}
+          {introPhase === "active" && (
+            <StoryCard
+              data={STORY_CARDS[Math.min(step, STORY_CARDS.length - 1)]}
+              stepKey={step}
+              visible={true}
+            />
+          )}
+
+          {/* ── ASSISTANT PITCH CARD — VAR response overlay ── */}
+          <AnimatePresence>
+            {assistantCard && introPhase === "active" && (
+              <AssistantPitchCard
+                key={`apc-${assistantCard.slice(0, 12)}`}
+                text={assistantCard}
+                accent={palette.accent}
+              />
+            )}
+          </AnimatePresence>
 
           {/* ── INTRO OVERLAY — VAR REVIEW ACTIVE ── */}
           <AnimatePresence>
