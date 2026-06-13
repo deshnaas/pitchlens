@@ -4,15 +4,17 @@
  * IncidentEngine — Immersive VAR investigation.
  *
  * Left   — step timeline
- * Centre — SVG pitch (the hero: cinematic camera, spotlight, progressive overlay reveals)
- * Right  — evidence panel (top, progressive reveal) + VAR Assistant / Granite (bottom)
+ * Centre — SVG pitch (the hero): camera system, spotlight, story overlays, breathing idle
+ * Right  — evidence panel (progressive reveal) + VAR Assistant (Granite)
  *
- * Immersion architecture:
- *  • Camera system   — per-step zoom/push via CSS transform on pitch wrapper
- *  • Spotlight       — SVG radial darkness focuses on key player per step
- *  • Vignette        — always-on cinematic edge darkening
- *  • Intro sequence  — "VAR REVIEW ACTIVE" hold before investigation begins
- *  • Progressive reveal — right panel text staggered in, never visible all at once
+ * Typography guide (rem, base 16px):
+ *   0.65rem  ≈ 10px  — micro tags / eyebrows
+ *   0.75rem  ≈ 12px  — secondary labels
+ *   0.875rem ≈ 14px  — body text
+ *   1rem     = 16px  — primary body / panel text
+ *   1.1rem   ≈ 18px  — section headings
+ *   1.25rem  = 20px  — step titles
+ *   1.5rem+          — pitch overlays / verdict
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -42,25 +44,77 @@ const POV_PALETTE = {
 } as const;
 
 // ── Camera positions (per step) ───────────────────────────────────────────────
-// scale: zoom factor  x/y: translate (% of element)  origin: transform-origin
 
 const CAMERA_STEPS = [
-  { scale: 1.00, x: "0%",   y: "0%",   origin: "center"  },   // 0 Incident — full pitch
-  { scale: 1.22, x: "-3%",  y: "-2%",  origin: "74% 46%" },   // 1 Evidence  — push toward action
-  { scale: 1.40, x: "-6%",  y: "-1%",  origin: "78% 46%" },   // 2 Law       — right half focus
-  { scale: 1.58, x: "-9%",  y: "-1%",  origin: "82% 45%" },   // 3 Analysis  — offside zone
-  { scale: 1.68, x: "-11%", y: "-1%",  origin: "84% 44%" },   // 4 Verdict   — verdict close-up
+  { scale: 1.00, x: "0%",   y: "0%",   origin: "center"  },
+  { scale: 1.22, x: "-3%",  y: "-2%",  origin: "74% 46%" },
+  { scale: 1.40, x: "-6%",  y: "-1%",  origin: "78% 46%" },
+  { scale: 1.58, x: "-9%",  y: "-1%",  origin: "82% 45%" },
+  { scale: 1.68, x: "-11%", y: "-1%",  origin: "84% 44%" },
 ] as const;
 
 // ── Spotlight positions (SVG pitch metres) ────────────────────────────────────
-// null = no spotlight, otherwise radial darkness around cx/cy with radius r
 
 const SPOTLIGHT_STEPS: (null | { cx: number; cy: number; r: number })[] = [
   null,
-  { cx: 82, cy: 33, r: 30 },   // 1: pass corridor Müller→Havertz
-  { cx: 88, cy: 32, r: 24 },   // 2: offside line zone
-  { cx: 89, cy: 32, r: 18 },   // 3: measurement area
-  { cx: 91, cy: 31, r: 14 },   // 4: verdict area (Havertz)
+  { cx: 82, cy: 33, r: 30 },
+  { cx: 88, cy: 32, r: 24 },
+  { cx: 89, cy: 32, r: 18 },
+  { cx: 91, cy: 31, r: 14 },
+];
+
+// ── Story cards (broadcast overlays) ─────────────────────────────────────────
+// Positioned in the pitch CONTAINER (not camera wrapper) → consistent size.
+// As camera zooms right the left side darkens → natural caption zone.
+
+interface StoryCardData {
+  left   : string;
+  top    : string;
+  eyebrow: string;
+  headline: string;
+  body?  : string;
+  accent?: string;
+  size?  : "sm" | "md" | "lg";
+}
+
+const STORY_CARDS: StoryCardData[] = [
+  {
+    left: "5%", top: "14%",
+    eyebrow : "72′  ·  Incident Detected",
+    headline: "Through Ball to Havertz",
+    body    : "Müller plays a through ball behind the defensive line. Havertz runs onto the pass. The assistant referee raises their flag.",
+    size    : "md",
+  },
+  {
+    left: "5%", top: "56%",
+    eyebrow : "Critical Frame",
+    headline: "Moment of Pass",
+    body    : "Offside is judged at the exact moment the ball leaves the passer's foot. Every position is frozen at this frame.",
+    size    : "sm",
+  },
+  {
+    left: "5%", top: "18%",
+    eyebrow : "Law 11  ·  Havertz Position",
+    headline: "Beyond the Line",
+    body    : "The attacker appears ahead of the second-last defender. Any part of the body that can score a goal must be onside.",
+    size    : "sm",
+  },
+  {
+    left: "5%", top: "16%",
+    eyebrow : "Position Difference",
+    headline: "Margin: 3.0m",
+    body    : "Havertz at 91.0m  ·  Silva at 88.0m\nThe attacker is clearly beyond the legal position.",
+    accent  : "rgba(255,200,80,0.95)",
+    size    : "md",
+  },
+  {
+    left: "5%", top: "14%",
+    eyebrow : "VAR Decision  ·  Confidence 96%",
+    headline: "OFFSIDE\nCONFIRMED",
+    body    : "VAR confirms the assistant referee's decision. Indirect free kick awarded to Brazil.",
+    accent  : "rgba(220,80,80,0.95)",
+    size    : "lg",
+  },
 ];
 
 // ── Team fills ────────────────────────────────────────────────────────────────
@@ -98,7 +152,7 @@ function PlayerDot({
       {player.label && (
         <text
           x={player.x} y={player.y - r - 0.9}
-          fill="rgba(255,255,255,0.62)" fontSize={1.65}
+          fill="rgba(255,255,255,0.72)" fontSize={1.85}
           textAnchor="middle" fontFamily="Inter, sans-serif"
           fontWeight={300} style={{ userSelect: "none" }}
         >
@@ -199,7 +253,9 @@ function OverlayLayer({ overlays, players, stepKey }: {
               style={{ letterSpacing: "0.06em", userSelect: "none" }}
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               transition={{ duration: 0.7, delay: (o.delay ?? 0.5) + i * 0.06 }}
-            />
+            >
+              {o.text}
+            </motion.text>
           );
         }
         if (ov.type === "measurement") {
@@ -240,7 +296,7 @@ function OverlayLayer({ overlays, players, stepKey }: {
   );
 }
 
-// ── PitchVignette — always-on cinematic edge darkening ────────────────────────
+// ── PitchVignette ─────────────────────────────────────────────────────────────
 
 function PitchVignette() {
   return (
@@ -256,7 +312,7 @@ function PitchVignette() {
   );
 }
 
-// ── SpotlightOverlay — step-aware radial focus darkening ─────────────────────
+// ── SpotlightOverlay ──────────────────────────────────────────────────────────
 
 function SpotlightOverlay({ step }: { step: number }) {
   const pos = SPOTLIGHT_STEPS[step];
@@ -277,91 +333,19 @@ function SpotlightOverlay({ step }: { step: number }) {
               <stop offset="100%" stopColor="rgba(0,0,28,0.75)" />
             </radialGradient>
           </defs>
-          <rect x={-5} y={-4} width={125} height={80}
-            fill={`url(#spt-grad-${step})`}
-          />
+          <rect x={-5} y={-4} width={125} height={80} fill={`url(#spt-grad-${step})`} />
         </motion.g>
       )}
     </AnimatePresence>
   );
 }
 
-// ── Story overlay system ──────────────────────────────────────────────────────
-//
-// Cards are positioned absolutely in the PITCH CONTAINER (not inside the camera
-// wrapper). This means they stay at a constant viewport position while the
-// camera zooms, which is exactly how broadcast overlays work.
-//
-// As the camera zooms RIGHT toward the offside zone, the left side of the
-// pitch container becomes dark (pitch content scrolls away) — creating a
-// natural, uncluttered caption zone. Step 0 uses the upper-left of the full
-// pitch; later steps use the same left zone which is now dark + readable.
-
-interface StoryCardData {
-  // Position in the pitch container (% — NOT pitch metres, NOT camera-relative)
-  left: string;
-  top : string;
-  // Content
-  eyebrow : string;
-  headline: string;
-  body?   : string;
-  // Visual
-  accent?  : string;   // override color for headline + line
-  size?    : "sm" | "md" | "lg";
-}
-
-// Positions are tuned for the 3-column layout.
-// Left side becomes dark caption zone as camera zooms right from step 1 onward.
-const STORY_CARDS: StoryCardData[] = [
-  {  // Step 0 — Incident detected, full pitch visible
-    left: "6%", top: "16%",
-    eyebrow : `72′  ·  Incident Detected`,
-    headline: "Through Ball to Havertz",
-    body    : "Müller plays a through ball behind the defensive line. Havertz runs onto the pass. The assistant referee raises their flag.",
-    size    : "md",
-  },
-  {  // Step 1 — Evidence: pass traced (ball area is center-left, camera pushes right)
-    left: "6%", top: "58%",
-    eyebrow : "Critical Frame",
-    headline: "Moment of Pass",
-    body    : "Offside is judged at the exact moment the ball leaves the passer's foot. Every position is frozen at this frame.",
-    size    : "sm",
-  },
-  {  // Step 2 — Law: camera on right half, left is now a dark zone
-    left: "6%", top: "22%",
-    eyebrow : "Law 11  ·  Havertz Position",
-    headline: "Beyond the Line",
-    body    : "The attacker appears ahead of the second-last defender. Under Law 11, any part of the body that can score must be onside.",
-    size    : "sm",
-  },
-  {  // Step 3 — Analysis: measurement, camera zoomed into offside zone
-    left: "6%", top: "20%",
-    eyebrow : "Position Difference",
-    headline: "Margin: 3.0m",
-    body    : "Havertz at 91.0m  ·  Silva at 88.0m.\nThe attacker is clearly beyond the legal position.",
-    accent  : "rgba(255,200,80,0.9)",
-    size    : "md",
-  },
-  {  // Step 4 — Verdict: most zoomed, left zone is clear dark space for the decision
-    left: "6%", top: "16%",
-    eyebrow : "VAR Decision  ·  Confidence 96%",
-    headline: "OFFSIDE CONFIRMED",
-    body    : "VAR confirms the assistant referee's original decision. Indirect free kick awarded to Brazil.",
-    accent  : "rgba(220,80,80,0.95)",
-    size    : "lg",
-  },
-];
-
 // ── StoryCard — broadcast-style pitch overlay ─────────────────────────────────
 
-function StoryCard({
-  data, stepKey, visible,
-}: {
-  data   : StoryCardData;
-  stepKey: number;
-  visible: boolean;
+function StoryCard({ data, stepKey, visible }: {
+  data: StoryCardData; stepKey: number; visible: boolean;
 }) {
-  const accentColor = data.accent ?? "rgba(168,196,224,0.72)";
+  const accentColor = data.accent ?? "rgba(168,196,224,0.8)";
   const isLg = data.size === "lg";
   const isSm = data.size === "sm";
 
@@ -370,72 +354,72 @@ function StoryCard({
       {visible && (
         <motion.div
           key={`sc-${stepKey}`}
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10, transition: { duration: 0.4, ease: "easeIn" } }}
-          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.45 }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.5 }}
           style={{
-            position      : "absolute",
-            left          : data.left,
-            top           : data.top,
-            zIndex        : 18,
-            pointerEvents : "none",
-            maxWidth      : isLg ? "220px" : isSm ? "172px" : "196px",
+            position     : "absolute",
+            left         : data.left,
+            top          : data.top,
+            zIndex       : 18,
+            pointerEvents: "none",
+            maxWidth     : isLg ? "260px" : isSm ? "210px" : "236px",
           }}
         >
-          {/* Dark halo behind text — legibility on any pitch colour */}
+          {/* Legibility halo */}
           <div style={{
             position  : "absolute",
-            inset     : "-18px -24px",
-            background: "radial-gradient(ellipse at 30% 40%, rgba(0,3,18,0.55) 0%, transparent 72%)",
+            inset     : "-22px -28px",
+            background: "radial-gradient(ellipse at 28% 38%, rgba(0,3,18,0.60) 0%, transparent 70%)",
             zIndex    : -1,
           }} />
 
           {/* Eyebrow */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.55, duration: 0.5 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
             style={{
-              fontSize     : "0.33rem",
-              letterSpacing: "0.42em",
+              fontSize     : "0.65rem",
+              letterSpacing: "0.2em",
               color        : accentColor,
               textTransform: "uppercase",
               fontWeight   : 300,
-              marginBottom : "9px",
-              opacity      : 0.72,
+              marginBottom : "10px",
+              opacity      : 0.75,
             }}
           >
             {data.eyebrow}
           </motion.div>
 
-          {/* Accent line — draws itself left-to-right */}
+          {/* Accent line */}
           <motion.div
             initial={{ scaleX: 0, opacity: 0 }}
             animate={{ scaleX: 1, opacity: 1 }}
-            transition={{ duration: 0.55, delay: 0.62, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.55, delay: 0.68, ease: [0.16, 1, 0.3, 1] }}
             style={{
-              width          : isLg ? "28px" : "20px",
+              width          : isLg ? "32px" : "22px",
               height         : "1px",
               background     : accentColor,
-              marginBottom   : "11px",
+              marginBottom   : "13px",
               transformOrigin: "left",
             }}
           />
 
           {/* Headline */}
           <motion.div
-            initial={{ opacity: 0, y: 5 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.65, delay: 0.74, ease: [0.16, 1, 0.3, 1] }}
             style={{
-              fontSize     : isLg ? "clamp(0.9rem, 1.9vw, 1.22rem)" : isSm ? "0.72rem" : "0.82rem",
-              letterSpacing: isLg ? "0.14em" : "0.04em",
-              color        : isLg ? (data.accent ?? "rgba(255,255,255,0.95)") : "rgba(255,255,255,0.92)",
+              fontSize     : isLg ? "clamp(1.3rem, 3vw, 2rem)" : isSm ? "1rem" : "1.2rem",
+              letterSpacing: isLg ? "0.1em" : "0.03em",
+              color        : isLg ? (data.accent ?? "rgba(255,255,255,0.96)") : "rgba(255,255,255,0.94)",
               fontWeight   : isLg ? 200 : 300,
-              lineHeight   : 1.18,
+              lineHeight   : 1.15,
               textTransform: isLg ? "uppercase" : "none",
-              marginBottom : data.body ? "11px" : 0,
+              marginBottom : data.body ? "13px" : 0,
+              whiteSpace   : "pre-line",
             }}
           >
             {data.headline}
@@ -446,12 +430,12 @@ function StoryCard({
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.7, delay: 1.05 }}
+              transition={{ duration: 0.7, delay: 1.1 }}
               style={{
-                fontSize     : "0.48rem",
-                letterSpacing: "0.025em",
-                color        : "rgba(255,255,255,0.38)",
-                lineHeight   : 1.78,
+                fontSize     : "0.75rem",
+                letterSpacing: "0.02em",
+                color        : "rgba(255,255,255,0.44)",
+                lineHeight   : 1.75,
                 fontWeight   : 300,
                 margin       : 0,
                 whiteSpace   : "pre-line",
@@ -466,9 +450,7 @@ function StoryCard({
   );
 }
 
-// ── AssistantPitchCard — VAR assistant response as pitch overlay ──────────────
-// Appears bottom-left of the pitch container when the assistant responds.
-// Clears automatically after 7 s or on next user message.
+// ── AssistantPitchCard ────────────────────────────────────────────────────────
 
 function AssistantPitchCard({ text, accent }: { text: string; accent: string }) {
   return (
@@ -479,53 +461,49 @@ function AssistantPitchCard({ text, accent }: { text: string; accent: string }) 
       transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
       style={{
         position     : "absolute",
-        left         : "6%",
+        left         : "5%",
         bottom       : "16%",
         zIndex       : 22,
         pointerEvents: "none",
-        maxWidth     : "200px",
+        maxWidth     : "240px",
       }}
     >
-      {/* Dark halo */}
       <div style={{
         position  : "absolute",
-        inset     : "-14px -20px",
-        background: "radial-gradient(ellipse at 30% 60%, rgba(0,3,18,0.62) 0%, transparent 72%)",
+        inset     : "-16px -22px",
+        background: "radial-gradient(ellipse at 28% 62%, rgba(0,3,18,0.65) 0%, transparent 72%)",
         zIndex    : -1,
       }} />
 
-      {/* VAR tag */}
       <div style={{
         display      : "flex",
         alignItems   : "center",
-        gap          : "6px",
-        fontSize     : "0.32rem",
-        letterSpacing: "0.4em",
-        color        : `rgba(${accent},0.5)`,
+        gap          : "8px",
+        fontSize     : "0.65rem",
+        letterSpacing: "0.22em",
+        color        : `rgba(${accent},0.6)`,
         textTransform: "uppercase",
         fontWeight   : 300,
-        marginBottom : "8px",
+        marginBottom : "10px",
       }}>
         <motion.div
           animate={{ opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 1.4, repeat: Infinity }}
-          style={{ width: 4, height: 4, borderRadius: "50%", background: `rgba(${accent},0.7)` }}
+          style={{ width: 5, height: 5, borderRadius: "50%", background: `rgba(${accent},0.75)`, flexShrink: 0 }}
         />
         VAR Response
       </div>
 
-      {/* Line */}
       <motion.div
         initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
         transition={{ duration: 0.4, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-        style={{ width: "18px", height: "1px", background: `rgba(${accent},0.4)`, marginBottom: "9px", transformOrigin: "left" }}
+        style={{ width: "20px", height: "1px", background: `rgba(${accent},0.45)`, marginBottom: "10px", transformOrigin: "left" }}
       />
 
-      {/* Text */}
       <p style={{
-        fontSize     : "0.54rem",
-        letterSpacing: "0.022em",
-        color        : `rgba(${accent},0.82)`,
+        fontSize     : "0.82rem",
+        letterSpacing: "0.02em",
+        color        : `rgba(${accent},0.85)`,
         lineHeight   : 1.72,
         fontWeight   : 300,
         margin       : 0,
@@ -571,32 +549,39 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
   const [inputValue,          setInputValue]          = useState("");
   const [isLoading,           setIsLoading]           = useState(false);
   const [assistantHighlights, setAssistantHighlights] = useState<string[]>([]);
-  // Pitch overlay from VAR assistant responses
   const [assistantCard,       setAssistantCard]       = useState<string | null>(null);
+  // Verdict dramatic lock — brief pause before verdict overlays appear
+  const [verdictLocked,       setVerdictLocked]       = useState(false);
+
   const assistantCardTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // ── Intro sequence ──────────────────────────────────────────────────────────
-  // "hold" → players appear, pitch is dark
-  // "reveal" → "VAR REVIEW ACTIVE" notification visible
-  // "active" → investigation begins, intro overlay fades
+  // Intro sequence
   const [introPhase, setIntroPhase] = useState<"hold" | "reveal" | "active">("hold");
-
   useEffect(() => {
     const t1 = setTimeout(() => setIntroPhase("reveal"), 350);
     const t2 = setTimeout(() => setIntroPhase("active"), 2800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [incident.id]);
 
+  // Verdict lock: when entering step 4, hold overlays for 1.4s for dramatic effect
+  useEffect(() => {
+    if (step === incident.steps.length - 1) {
+      setVerdictLocked(true);
+      const t = setTimeout(() => setVerdictLocked(false), 1400);
+      return () => clearTimeout(t);
+    }
+  }, [step, incident.steps.length]);
+
   const palette  = POV_PALETTE[pov];
   const stepData = incident.steps[step];
   const isLastStep  = step === incident.steps.length - 1;
   const isFirstStep = step === 0;
   const cam = CAMERA_STEPS[Math.min(step, CAMERA_STEPS.length - 1)];
+  const acc = `rgba(${palette.accent},`;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
   const incidentContext = buildIncidentContext(incident);
-  const acc = `rgba(${palette.accent},`;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -610,7 +595,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     }]);
   }, [incident.id]);
 
-  // Highlight map
+  // Highlight map (step overlays + assistant)
   const highlightMap = new Map<string, { color: string; pulse: boolean }>();
   stepData.overlays.forEach(ov => {
     if (ov.type === "highlight") {
@@ -652,7 +637,6 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     if (!msg || isLoading) return;
     setInputValue("");
     setAssistantHighlights([]);
-    // Clear previous assistant pitch card
     setAssistantCard(null);
     clearTimeout(assistantCardTimer.current);
     setMessages(prev => [...prev, { role: "user", text: msg, timestamp: Date.now() }]);
@@ -670,7 +654,6 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
         stepRef  : data.action?.type === "goToStep" ? (data.action.value ?? undefined) : undefined,
         timestamp: Date.now(),
       }]);
-      // Show response as a pitch overlay card too
       setAssistantCard(data.text);
       assistantCardTimer.current = setTimeout(() => setAssistantCard(null), 7000);
       applyAction(data.action);
@@ -683,72 +666,78 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
 
   const quickPrompts = ["Why is this offside?", "Show me the evidence", "Who is the last defender?", "Explain Law 11"];
 
+  const showOverlays = introPhase === "active" && !verdictLocked;
+
   return (
     <div
       className="flex h-screen overflow-hidden select-none"
-      style={{ background: palette.bg, fontFamily: "var(--font-inter), sans-serif", cursor: "none" }}
+      style={{ background: palette.bg, fontFamily: "var(--font-inter), Inter, sans-serif", cursor: "none" }}
     >
 
       {/* ══ LEFT — Timeline ══════════════════════════════════════════════════ */}
       <nav style={{
-        width: "200px", flexShrink: 0,
-        background: "rgba(0,4,14,0.96)",
-        borderRight: `1px solid ${acc}0.06)`,
-        display: "flex", flexDirection: "column",
+        width: "220px", flexShrink: 0,
+        background  : "rgba(0,4,14,0.97)",
+        borderRight : `1px solid ${acc}0.07)`,
+        display     : "flex",
+        flexDirection:"column",
       }}>
-        <div style={{ padding: "22px 18px 16px", borderBottom: `1px solid ${acc}0.06)`, flexShrink: 0 }}>
+        {/* Header */}
+        <div style={{ padding: "24px 20px 18px", borderBottom: `1px solid ${acc}0.07)`, flexShrink: 0 }}>
           <button
             onClick={onBack}
             style={{
               background: "none", border: "none", padding: 0, cursor: "none",
-              color: `${acc}0.3)`, fontSize: "0.46rem",
-              letterSpacing: "0.3em", textTransform: "uppercase",
-              display: "block", marginBottom: "18px", transition: "color 0.25s",
+              color: `${acc}0.38)`, fontSize: "0.7rem",
+              letterSpacing: "0.2em", textTransform: "uppercase",
+              display: "block", marginBottom: "22px", transition: "color 0.25s",
+              fontFamily: "inherit",
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = `${acc}0.65)`)}
-            onMouseLeave={e => (e.currentTarget.style.color = `${acc}0.3)`)}
+            onMouseEnter={e => (e.currentTarget.style.color = `${acc}0.72)`)}
+            onMouseLeave={e => (e.currentTarget.style.color = `${acc}0.38)`)}
           >
             ← Return
           </button>
-          <div style={{ fontSize: "0.42rem", letterSpacing: "0.36em", color: `${acc}0.28)`, textTransform: "uppercase" }}>
+          <div style={{ fontSize: "0.65rem", letterSpacing: "0.28em", color: `${acc}0.32)`, textTransform: "uppercase", marginBottom: "6px" }}>
             VAR Investigation
           </div>
-          <div style={{ fontSize: "0.7rem", letterSpacing: "0.1em", color: `${acc}0.7)`, marginTop: "5px", fontWeight: 300 }}>
+          <div style={{ fontSize: "1rem", letterSpacing: "0.04em", color: `${acc}0.82)`, fontWeight: 300, lineHeight: 1.3 }}>
             {incident.matchContext.teams[0]} vs {incident.matchContext.teams[1]}
           </div>
-          <div style={{ fontSize: "0.42rem", letterSpacing: "0.18em", color: `${acc}0.25)`, marginTop: "3px" }}>
+          <div style={{ fontSize: "0.72rem", letterSpacing: "0.1em", color: `${acc}0.32)`, marginTop: "4px" }}>
             {incident.matchContext.minute}&apos; — {incident.matchContext.score}
           </div>
         </div>
 
+        {/* Steps */}
         <div style={{ flex: 1, overflowY: "auto" }}>
           {incident.steps.map((s, i) => {
             const isActive = i === step;
             const isPast   = i < step;
-            const isLocked = introPhase !== "active" && i > 0; // lock steps during intro
+            const isLocked = introPhase !== "active" && i > 0;
             return (
               <button key={i} onClick={() => !isLocked && setStep(i)}
                 style={{
                   width: "100%", background: "none", border: "none",
-                  borderLeft: isActive ? `2px solid ${acc}0.65)` : "2px solid transparent",
-                  backgroundColor: isActive ? `${acc}0.04)` : "transparent",
-                  padding: "14px 16px", display: "flex", alignItems: "flex-start",
-                  gap: "10px", textAlign: "left", cursor: "none",
+                  borderLeft: isActive ? `2px solid ${acc}0.7)` : "2px solid transparent",
+                  backgroundColor: isActive ? `${acc}0.05)` : "transparent",
+                  padding: "16px 18px", display: "flex", alignItems: "flex-start",
+                  gap: "12px", textAlign: "left", cursor: "none",
                   transition: "background-color 0.3s, border-color 0.3s",
-                  opacity: isLocked ? 0.3 : 1,
+                  opacity: isLocked ? 0.28 : 1,
                 }}
               >
                 <span style={{
-                  fontSize: "0.54rem", letterSpacing: "0.1em",
-                  color: isActive ? `${acc}0.85)` : isPast ? `${acc}0.38)` : `${acc}0.16)`,
-                  fontWeight: 300, minWidth: "20px", paddingTop: "1px", transition: "color 0.3s",
+                  fontSize: "0.72rem", letterSpacing: "0.08em",
+                  color: isActive ? `${acc}0.88)` : isPast ? `${acc}0.42)` : `${acc}0.18)`,
+                  fontWeight: 300, minWidth: "24px", paddingTop: "1px", transition: "color 0.3s",
                 }}>
                   {(s.id + 1).toString().padStart(2, "0")}
                 </span>
                 <div>
                   <div style={{
-                    fontSize: "0.48rem", letterSpacing: "0.18em", textTransform: "uppercase",
-                    color: isActive ? `${acc}0.8)` : isPast ? `${acc}0.32)` : `${acc}0.16)`,
+                    fontSize: "0.72rem", letterSpacing: "0.15em", textTransform: "uppercase",
+                    color: isActive ? `${acc}0.88)` : isPast ? `${acc}0.38)` : `${acc}0.18)`,
                     fontWeight: 300, lineHeight: 1, transition: "color 0.3s",
                   }}>
                     {s.label}
@@ -758,7 +747,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                       <motion.div
                         initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.28 }}
-                        style={{ fontSize: "0.4rem", letterSpacing: "0.04em", color: `${acc}0.3)`, marginTop: "4px", lineHeight: 1.5, overflow: "hidden" }}
+                        style={{ fontSize: "0.7rem", color: `${acc}0.38)`, marginTop: "5px", lineHeight: 1.5, overflow: "hidden" }}
                       >
                         {s.title}
                       </motion.div>
@@ -770,37 +759,38 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           })}
         </div>
 
-        <div style={{ padding: "14px 16px", borderTop: `1px solid ${acc}0.06)`, flexShrink: 0 }}>
+        {/* Progress */}
+        <div style={{ padding: "16px 18px", borderTop: `1px solid ${acc}0.07)`, flexShrink: 0 }}>
           <div style={{ display: "flex", gap: "4px" }}>
             {incident.steps.map((_, i) => (
               <motion.div key={i}
-                animate={{ flex: i === step ? 2.5 : 1, backgroundColor: i <= step ? `${acc}0.6)` : `${acc}0.12)` }}
+                animate={{ flex: i === step ? 2.5 : 1, backgroundColor: i <= step ? `${acc}0.65)` : `${acc}0.12)` }}
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                 style={{ height: "2px", borderRadius: "1px" }}
               />
             ))}
           </div>
-          <div style={{ fontSize: "0.4rem", letterSpacing: "0.2em", color: `${acc}0.2)`, marginTop: "7px" }}>
+          <div style={{ fontSize: "0.7rem", letterSpacing: "0.12em", color: `${acc}0.28)`, marginTop: "8px" }}>
             Step {step + 1} of {incident.steps.length}
           </div>
         </div>
       </nav>
 
-      {/* ══ CENTRE — Pitch (the hero) ════════════════════════════════════════ */}
+      {/* ══ CENTRE — Pitch ═══════════════════════════════════════════════════ */}
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
 
-        {/* Top status bar */}
+        {/* Status bar */}
         <div style={{
-          padding: "11px 20px", borderBottom: `1px solid ${acc}0.05)`,
+          padding: "12px 22px", borderBottom: `1px solid ${acc}0.06)`,
           display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
-          background: "rgba(0,4,14,0.5)",
+          background: "rgba(0,4,14,0.55)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <motion.div
               animate={{ opacity: [1, 0.2, 1] }} transition={{ duration: 1.8, repeat: Infinity }}
-              style={{ width: 6, height: 6, borderRadius: "50%", background: "rgba(220,80,80,0.9)" }}
+              style={{ width: 7, height: 7, borderRadius: "50%", background: "rgba(220,80,80,0.92)" }}
             />
-            <span style={{ fontSize: "0.42rem", letterSpacing: "0.3em", color: `${acc}0.4)`, textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.72rem", letterSpacing: "0.2em", color: `${acc}0.48)`, textTransform: "uppercase" }}>
               VAR Review Active — {incident.matchContext.minute}&apos;
             </span>
           </div>
@@ -808,86 +798,32 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             <motion.span key={step}
               initial={{ opacity: 0, y: 4 }} animate={{ opacity: introPhase === "active" ? 1 : 0, y: 0 }}
               exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.35 }}
-              style={{ fontSize: "0.42rem", letterSpacing: "0.18em", color: `${acc}0.35)`, textTransform: "uppercase" }}
+              style={{ fontSize: "0.7rem", letterSpacing: "0.15em", color: `${acc}0.38)`, textTransform: "uppercase" }}
             >
               {stepData.label} — {stepData.title}
             </motion.span>
           </AnimatePresence>
-          <span style={{ fontSize: "0.4rem", letterSpacing: "0.18em", color: `${acc}0.18)` }}>
+          <span style={{ fontSize: "0.65rem", letterSpacing: "0.14em", color: `${acc}0.22)` }}>
             {step + 1} / {incident.steps.length}
           </span>
         </div>
 
-        {/* ── PITCH CONTAINER — cinematic camera system ── */}
+        {/* Pitch container */}
         <div style={{
-          flex: 1,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "10px 12px 6px",
-          position: "relative",
-          overflow: "hidden",
+          flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "8px 10px 4px", position: "relative", overflow: "hidden",
         }}>
-          {/* Camera wrapper — zoom/push per step */}
-          <motion.div
-            animate={{ scale: cam.scale, x: cam.x, y: cam.y }}
-            transition={{ duration: 2.0, ease: [0.25, 0.08, 0.25, 1] }}
-            style={{
-              width: "100%",
-              maxHeight: "100%",
-              aspectRatio: "115/76",
-              transformOrigin: cam.origin,
-              willChange: "transform",
-            }}
-          >
-            <SVGPitch>
-              {/* Cinematic vignette — always present */}
-              <PitchVignette />
 
-              {/* Step overlays */}
-              <AnimatePresence mode="wait">
-                {introPhase === "active" && (
-                  <OverlayLayer key={`ov-${step}`} overlays={stepData.overlays} players={incident.players} stepKey={step} />
-                )}
-              </AnimatePresence>
-
-              {/* Assistant-triggered highlights (gold, temporary) */}
-              {assistantHighlights.length > 0 && (
-                <OverlayLayer
-                  key={`asst-${assistantHighlights.join("-")}`}
-                  overlays={assistantHighlights.map(id => ({ type: "highlight" as const, playerId: id, color: "rgba(255,200,80,0.95)", pulse: true }))}
-                  players={incident.players}
-                  stepKey={`asst-${assistantHighlights.join("-")}`}
-                />
-              )}
-
-              {/* Players */}
-              {incident.players.map(pl => {
-                const hl = highlightMap.get(pl.id);
-                return (
-                  <PlayerDot key={`${pl.id}-${step}`} player={pl}
-                    highlighted={!!hl} highlightColor={hl?.color ?? ""}
-                    dimmed={hasHighlights && !hl} pulse={hl?.pulse ?? false}
-                  />
-                );
-              })}
-
-              {/* Ball */}
-              <BallDot key={`ball-${step}`} ball={incident.ball} />
-
-              {/* Spotlight — step-aware focus darkening */}
-              {introPhase === "active" && <SpotlightOverlay step={step} />}
-            </SVGPitch>
-          </motion.div>
-
-          {/* ── STORY CARD — pitch storytelling overlay (left caption zone) ── */}
+          {/* Story card overlay — broadcast-style caption */}
           {introPhase === "active" && (
             <StoryCard
               data={STORY_CARDS[Math.min(step, STORY_CARDS.length - 1)]}
               stepKey={step}
-              visible={true}
+              visible={!verdictLocked || step !== incident.steps.length - 1}
             />
           )}
 
-          {/* ── ASSISTANT PITCH CARD — VAR response overlay ── */}
+          {/* Assistant pitch card */}
           <AnimatePresence>
             {assistantCard && introPhase === "active" && (
               <AssistantPitchCard
@@ -898,7 +834,88 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             )}
           </AnimatePresence>
 
-          {/* ── INTRO OVERLAY — VAR REVIEW ACTIVE ── */}
+          {/* Breathing outer wrapper — subtle idle camera life */}
+          <motion.div
+            animate={{ scale: [1, 1.006, 1, 1.003, 1], y: ["0%", "-0.35%", "0%", "0.18%", "0%"] }}
+            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", times: [0, 0.25, 0.5, 0.75, 1] }}
+            style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", position: "absolute", inset: 0 }}
+          >
+            {/* Camera wrapper */}
+            <motion.div
+              animate={{ scale: cam.scale, x: cam.x, y: cam.y }}
+              transition={{ duration: 2.0, ease: [0.25, 0.08, 0.25, 1] }}
+              style={{
+                width: "100%", maxHeight: "100%", aspectRatio: "115/76",
+                transformOrigin: cam.origin, willChange: "transform",
+              }}
+            >
+              <SVGPitch>
+                <PitchVignette />
+
+                <AnimatePresence mode="wait">
+                  {showOverlays && (
+                    <OverlayLayer key={`ov-${step}`} overlays={stepData.overlays} players={incident.players} stepKey={step} />
+                  )}
+                </AnimatePresence>
+
+                {assistantHighlights.length > 0 && (
+                  <OverlayLayer
+                    key={`asst-${assistantHighlights.join("-")}`}
+                    overlays={assistantHighlights.map(id => ({ type: "highlight" as const, playerId: id, color: "rgba(255,200,80,0.95)", pulse: true }))}
+                    players={incident.players}
+                    stepKey={`asst-${assistantHighlights.join("-")}`}
+                  />
+                )}
+
+                {incident.players.map(pl => {
+                  const hl = highlightMap.get(pl.id);
+                  return (
+                    <PlayerDot key={`${pl.id}-${step}`} player={pl}
+                      highlighted={!!hl} highlightColor={hl?.color ?? ""}
+                      dimmed={hasHighlights && !hl} pulse={hl?.pulse ?? false}
+                    />
+                  );
+                })}
+
+                <BallDot key={`ball-${step}`} ball={incident.ball} />
+
+                {introPhase === "active" && <SpotlightOverlay step={step} />}
+              </SVGPitch>
+            </motion.div>
+          </motion.div>
+
+          {/* Verdict dramatic pause overlay */}
+          <AnimatePresence>
+            {verdictLocked && (
+              <motion.div
+                key="verdict-pause"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: 0.8 } }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none",
+                  background: "rgba(0,2,10,0.5)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: [0, 1, 1, 0], scale: [0.92, 1, 1, 0.96] }}
+                  transition={{ duration: 1.4, times: [0, 0.25, 0.75, 1] }}
+                  style={{
+                    fontSize: "0.72rem", letterSpacing: "0.52em",
+                    color: "rgba(220,80,80,0.7)", textTransform: "uppercase",
+                    fontWeight: 300,
+                  }}
+                >
+                  VAR Decision
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Intro overlay */}
           <AnimatePresence>
             {introPhase !== "active" && (
               <motion.div
@@ -907,79 +924,51 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                 animate={{ opacity: introPhase === "reveal" ? 1 : 0 }}
                 exit={{ opacity: 0, transition: { duration: 1.2, ease: "easeIn" } }}
                 style={{
-                  position: "absolute", inset: 0,
-                  display: "flex", flexDirection: "column",
-                  alignItems: "center", justifyContent: "center",
-                  zIndex: 20, pointerEvents: "none",
-                  background: "radial-gradient(ellipse at center, rgba(0,6,20,0.3) 0%, rgba(0,2,10,0.82) 100%)",
+                  position: "absolute", inset: 0, zIndex: 20, pointerEvents: "none",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  background: "radial-gradient(ellipse at center, rgba(0,6,20,0.3) 0%, rgba(0,2,10,0.85) 100%)",
                 }}
               >
                 <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: introPhase === "reveal" ? 1 : 0, y: introPhase === "reveal" ? 0 : 16 }}
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: introPhase === "reveal" ? 1 : 0, y: introPhase === "reveal" ? 0 : 18 }}
                   transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
                   style={{ textAlign: "center" }}
                 >
-                  {/* Red pulsing dot */}
                   <motion.div
-                    animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.15, 1] }}
+                    animate={{ opacity: [0.6, 1, 0.6], scale: [1, 1.18, 1] }}
                     transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                    style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(220,80,80,0.92)", margin: "0 auto 20px" }}
+                    style={{ width: 9, height: 9, borderRadius: "50%", background: "rgba(220,80,80,0.92)", margin: "0 auto 22px" }}
                   />
 
-                  {/* VAR REVIEW ACTIVE label */}
-                  <div style={{
-                    fontSize: "0.38rem", letterSpacing: "0.48em",
-                    color: "rgba(220,80,80,0.65)", textTransform: "uppercase",
-                    marginBottom: "18px", fontWeight: 300,
-                  }}>
+                  <div style={{ fontSize: "0.72rem", letterSpacing: "0.42em", color: "rgba(220,80,80,0.7)", textTransform: "uppercase", marginBottom: "20px", fontWeight: 300 }}>
                     VAR Review Active
                   </div>
 
-                  {/* Incident title */}
-                  <div style={{
-                    fontSize: "clamp(1rem, 2.2vw, 1.5rem)",
-                    letterSpacing: "0.06em",
-                    color: `${acc}0.92)`,
-                    fontWeight: 200,
-                    lineHeight: 1.2,
-                  }}>
+                  <div style={{ fontSize: "clamp(1.2rem, 2.8vw, 1.8rem)", letterSpacing: "0.05em", color: `${acc}0.94)`, fontWeight: 200, lineHeight: 1.2 }}>
                     {incident.title}
                   </div>
 
-                  {/* Match context */}
-                  <div style={{
-                    marginTop: "14px",
-                    fontSize: "0.44rem", letterSpacing: "0.22em",
-                    color: `${acc}0.35)`, fontWeight: 300,
-                  }}>
+                  <div style={{ marginTop: "16px", fontSize: "0.78rem", letterSpacing: "0.18em", color: `${acc}0.38)`, fontWeight: 300 }}>
                     {incident.matchContext.minute}&apos; — {incident.matchContext.teams[0]} vs {incident.matchContext.teams[1]} — {incident.matchContext.score}
                   </div>
 
-                  {/* Scanning line */}
                   <motion.div
                     initial={{ scaleX: 0, opacity: 0 }}
                     animate={{ scaleX: 1, opacity: [0, 0.6, 0] }}
                     transition={{ duration: 1.8, delay: 0.6, ease: "easeInOut" }}
                     style={{
-                      marginTop: "28px",
-                      height: "1px",
-                      width: "160px",
+                      marginTop: "30px", height: "1px", width: "160px",
                       background: `linear-gradient(90deg, transparent, ${acc}0.5), transparent)`,
-                      transformOrigin: "left",
-                      marginLeft: "auto", marginRight: "auto",
+                      transformOrigin: "left", marginLeft: "auto", marginRight: "auto",
                     }}
                   />
 
                   <motion.div
                     initial={{ opacity: 0 }}
-                    animate={{ opacity: introPhase === "reveal" ? [0, 0.5, 0] : 0 }}
+                    animate={{ opacity: introPhase === "reveal" ? [0, 0.45, 0] : 0 }}
                     transition={{ duration: 1.4, delay: 1.2, repeat: 1 }}
-                    style={{
-                      marginTop: "16px",
-                      fontSize: "0.36rem", letterSpacing: "0.4em",
-                      color: `${acc}0.28)`, textTransform: "uppercase",
-                    }}
+                    style={{ marginTop: "18px", fontSize: "0.65rem", letterSpacing: "0.38em", color: `${acc}0.28)`, textTransform: "uppercase" }}
                   >
                     Initialising investigation
                   </motion.div>
@@ -991,20 +980,20 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
 
         {/* Bottom nav */}
         <div style={{
-          padding: "10px 20px",
-          borderTop: `1px solid ${acc}0.05)`,
+          padding: "11px 22px",
+          borderTop: `1px solid ${acc}0.06)`,
           display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0,
-          background: "rgba(0,4,14,0.5)",
+          background: "rgba(0,4,14,0.55)",
         }}>
           <motion.button onClick={goPrev} disabled={isFirstStep || introPhase !== "active"}
             style={{
               background: "none",
-              border: `1px solid ${acc}${isFirstStep || introPhase !== "active" ? "0.07)" : "0.18)"}`,
-              color: `${acc}${isFirstStep || introPhase !== "active" ? "0.12)" : "0.5)"}`,
-              padding: "6px 18px", fontSize: "0.42rem", letterSpacing: "0.28em",
+              border: `1px solid ${acc}${isFirstStep || introPhase !== "active" ? "0.07)" : "0.2)"}`,
+              color: `${acc}${isFirstStep || introPhase !== "active" ? "0.14)" : "0.55)"}`,
+              padding: "8px 20px", fontSize: "0.78rem", letterSpacing: "0.18em",
               textTransform: "uppercase", cursor: "none", fontFamily: "inherit", transition: "all 0.25s",
             }}
-            whileHover={!isFirstStep && introPhase === "active" ? { borderColor: `${acc}0.4)`, color: `${acc}0.8)` } : {}}
+            whileHover={!isFirstStep && introPhase === "active" ? { borderColor: `${acc}0.42)`, color: `${acc}0.88)` } : {}}
           >
             ← Prev
           </motion.button>
@@ -1014,13 +1003,13 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             <motion.div key={step}
               initial={{ opacity: 0 }} animate={{ opacity: introPhase === "active" ? 1 : 0 }}
               exit={{ opacity: 0 }} transition={{ duration: 0.4 }}
-              style={{ display: "flex", gap: "16px", alignItems: "center" }}
+              style={{ display: "flex", gap: "18px", alignItems: "center" }}
             >
-              <PitchLegendItem color="rgba(255,255,255,0.75)"  label="Germany" />
-              <PitchLegendItem color="rgba(255,205,55,0.75)"   label="Brazil" />
-              {step >= 1 && <PitchLegendItem color="rgba(168,196,224,0.65)" label="Pass line" dash />}
-              {step >= 2 && <PitchLegendItem color="rgba(220,80,80,0.75)"  label="Offside line" />}
-              {step >= 3 && <PitchLegendItem color="rgba(255,200,80,0.75)" label="Measurement" dash />}
+              <PitchLegendItem color="rgba(255,255,255,0.78)"  label="Germany" />
+              <PitchLegendItem color="rgba(255,205,55,0.78)"   label="Brazil" />
+              {step >= 1 && <PitchLegendItem color="rgba(168,196,224,0.68)" label="Pass line" dash />}
+              {step >= 2 && <PitchLegendItem color="rgba(220,80,80,0.78)"  label="Offside line" />}
+              {step >= 3 && <PitchLegendItem color="rgba(255,200,80,0.78)" label="Measurement" dash />}
             </motion.div>
           </AnimatePresence>
 
@@ -1028,21 +1017,21 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             <motion.button
               onClick={() => { if (introPhase === "active") goNext(); else setIntroPhase("active"); }}
               style={{
-                background: `${acc}0.07)`, border: `1px solid ${acc}0.22)`,
-                color: `${acc}0.75)`, padding: "6px 22px", fontSize: "0.42rem",
-                letterSpacing: "0.28em", textTransform: "uppercase",
+                background: `${acc}0.08)`, border: `1px solid ${acc}0.24)`,
+                color: `${acc}0.78)`, padding: "8px 24px", fontSize: "0.78rem",
+                letterSpacing: "0.18em", textTransform: "uppercase",
                 cursor: "none", fontFamily: "inherit", transition: "all 0.25s",
               }}
-              whileHover={{ backgroundColor: `${acc}0.14)`, color: `${acc}1)` }}
+              whileHover={{ backgroundColor: `${acc}0.16)`, color: `${acc}1)` }}
             >
               {introPhase !== "active" ? "Begin →" : "Next →"}
             </motion.button>
           ) : (
             <motion.button onClick={onBack}
               style={{
-                background: "rgba(80,200,120,0.07)", border: "1px solid rgba(80,200,120,0.25)",
-                color: "rgba(80,200,120,0.8)", padding: "6px 22px", fontSize: "0.42rem",
-                letterSpacing: "0.28em", textTransform: "uppercase",
+                background: "rgba(80,200,120,0.07)", border: "1px solid rgba(80,200,120,0.28)",
+                color: "rgba(80,200,120,0.82)", padding: "8px 24px", fontSize: "0.78rem",
+                letterSpacing: "0.18em", textTransform: "uppercase",
                 cursor: "none", fontFamily: "inherit", transition: "all 0.25s",
               }}
               whileHover={{ backgroundColor: "rgba(80,200,120,0.14)", color: "rgba(80,200,120,1)" }}
@@ -1055,27 +1044,24 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
 
       {/* ══ RIGHT — Evidence (top) + VAR Assistant (bottom) ═════════════════ */}
       <aside style={{
-        width: "320px", flexShrink: 0,
-        background: "rgba(0,4,14,0.96)",
-        borderLeft: `1px solid ${acc}0.06)`,
+        width: "340px", flexShrink: 0,
+        background: "rgba(0,4,14,0.97)",
+        borderLeft: `1px solid ${acc}0.07)`,
         display: "flex", flexDirection: "column",
       }}>
 
-        {/* ── TOP: Evidence / law / step content ── */}
-        <div style={{ flexShrink: 0, maxHeight: "44%", overflowY: "auto", borderBottom: `1px solid ${acc}0.08)` }}>
-          <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${acc}0.06)`, flexShrink: 0 }}>
-            <motion.div
-              animate={{ opacity: introPhase === "active" ? 1 : 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <div style={{ fontSize: "0.4rem", letterSpacing: "0.36em", color: `${acc}0.28)`, textTransform: "uppercase" }}>
+        {/* Evidence panel */}
+        <div style={{ flexShrink: 0, maxHeight: "44%", overflowY: "auto", borderBottom: `1px solid ${acc}0.09)` }}>
+          <div style={{ padding: "20px 22px 14px", borderBottom: `1px solid ${acc}0.07)` }}>
+            <motion.div animate={{ opacity: introPhase === "active" ? 1 : 0 }} transition={{ duration: 0.5 }}>
+              <div style={{ fontSize: "0.65rem", letterSpacing: "0.3em", color: `${acc}0.32)`, textTransform: "uppercase", marginBottom: "6px" }}>
                 Step {String(step + 1).padStart(2, "0")} — {stepData.type.toUpperCase()}
               </div>
               <AnimatePresence mode="wait">
                 <motion.h2 key={step}
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.45, delay: 0.1 }}
-                  style={{ fontSize: "0.84rem", fontWeight: 300, letterSpacing: "0.03em", color: `${acc}0.88)`, lineHeight: 1.3, margin: "7px 0 0" }}
+                  style={{ fontSize: "1.1rem", fontWeight: 300, letterSpacing: "0.02em", color: `${acc}0.92)`, lineHeight: 1.3, margin: "0" }}
                 >
                   {stepData.title}
                 </motion.h2>
@@ -1083,70 +1069,65 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             </motion.div>
           </div>
 
-          {/* Progressive content reveal */}
           <AnimatePresence mode="wait">
             <motion.div key={step}
               initial={{ opacity: 0 }} animate={{ opacity: introPhase === "active" ? 1 : 0 }}
               exit={{ opacity: 0 }} transition={{ duration: 0.35 }}
-              style={{ padding: "12px 20px 14px", display: "flex", flexDirection: "column", gap: "10px" }}
+              style={{ padding: "14px 22px 16px", display: "flex", flexDirection: "column", gap: "12px" }}
             >
-              {/* Body — delayed reveal */}
               <motion.p
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 transition={{ duration: 0.7, delay: 0.35 }}
-                style={{ fontSize: "0.57rem", letterSpacing: "0.025em", color: "rgba(255,255,255,0.42)", lineHeight: 1.82, fontWeight: 300, margin: 0 }}
+                style={{ fontSize: "0.875rem", color: "rgba(255,255,255,0.48)", lineHeight: 1.82, fontWeight: 300, margin: 0 }}
               >
                 {stepData.body}
               </motion.p>
 
-              {/* Law reference — slow reveal */}
               {stepData.lawRef && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.65, delay: 0.75, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ background: `${acc}0.045)`, border: `1px solid ${acc}0.12)`, padding: "11px 13px" }}
+                  style={{ background: `${acc}0.045)`, border: `1px solid ${acc}0.12)`, padding: "13px 15px" }}
                 >
-                  <div style={{ fontSize: "0.38rem", letterSpacing: "0.34em", color: `${acc}0.4)`, textTransform: "uppercase", marginBottom: "7px" }}>
+                  <div style={{ fontSize: "0.65rem", letterSpacing: "0.28em", color: `${acc}0.45)`, textTransform: "uppercase", marginBottom: "8px" }}>
                     Law {stepData.lawRef.number} — {stepData.lawRef.title}
                   </div>
-                  <p style={{ fontSize: "0.52rem", letterSpacing: "0.02em", color: `${acc}0.65)`, lineHeight: 1.72, fontWeight: 300, fontStyle: "italic", margin: 0 }}>
+                  <p style={{ fontSize: "0.82rem", color: `${acc}0.68)`, lineHeight: 1.75, fontWeight: 300, fontStyle: "italic", margin: 0 }}>
                     &ldquo;{stepData.lawRef.text}&rdquo;
                   </p>
                 </motion.div>
               )}
 
-              {/* Technical data — stagger each line */}
               {stepData.technical && (
-                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", padding: "10px 12px" }}>
-                  <div style={{ fontSize: "0.38rem", letterSpacing: "0.34em", color: `${acc}0.3)`, textTransform: "uppercase", marginBottom: "8px" }}>
+                <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", padding: "12px 14px" }}>
+                  <div style={{ fontSize: "0.65rem", letterSpacing: "0.28em", color: `${acc}0.32)`, textTransform: "uppercase", marginBottom: "10px" }}>
                     Technical Data
                   </div>
                   {stepData.technical.map((line, i) => (
                     <motion.div key={i}
                       initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.4, delay: 0.6 + i * 0.12 }}
-                      style={{ display: "flex", gap: "7px", fontSize: "0.49rem", letterSpacing: "0.05em", color: "rgba(255,255,255,0.3)", lineHeight: 1.95, fontWeight: 300 }}
+                      style={{ display: "flex", gap: "8px", fontSize: "0.82rem", color: "rgba(255,255,255,0.34)", lineHeight: 2, fontWeight: 300 }}
                     >
-                      <span style={{ color: `${acc}0.24)`, flexShrink: 0 }}>—</span>{line}
+                      <span style={{ color: `${acc}0.28)`, flexShrink: 0 }}>—</span>{line}
                     </motion.div>
                   ))}
                 </div>
               )}
 
-              {/* Verdict — very late reveal, understated in panel (pitch has the big display) */}
               {stepData.verdict && (
                 <motion.div
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  transition={{ delay: 1.4, duration: 0.8 }}
-                  style={{ background: "rgba(220,80,80,0.06)", border: "1px solid rgba(220,80,80,0.2)", padding: "12px 16px", textAlign: "center" }}
+                  transition={{ delay: 1.6, duration: 0.9 }}
+                  style={{ background: "rgba(220,80,80,0.07)", border: "1px solid rgba(220,80,80,0.22)", padding: "14px 18px", textAlign: "center" }}
                 >
-                  <div style={{ fontSize: "0.36rem", letterSpacing: "0.36em", color: "rgba(220,80,80,0.45)", textTransform: "uppercase", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "0.65rem", letterSpacing: "0.3em", color: "rgba(220,80,80,0.5)", textTransform: "uppercase", marginBottom: "8px" }}>
                     VAR Decision
                   </div>
-                  <div style={{ fontSize: "0.88rem", letterSpacing: "0.22em", color: "rgba(220,80,80,0.9)", fontWeight: 200, textTransform: "uppercase" }}>
+                  <div style={{ fontSize: "1.15rem", letterSpacing: "0.18em", color: "rgba(220,80,80,0.94)", fontWeight: 200, textTransform: "uppercase" }}>
                     {stepData.verdict.decision}
                   </div>
-                  <div style={{ marginTop: "6px", fontSize: "0.4rem", letterSpacing: "0.1em", color: "rgba(220,80,80,0.35)", fontWeight: 300 }}>
+                  <div style={{ marginTop: "8px", fontSize: "0.78rem", color: "rgba(220,80,80,0.38)", fontWeight: 300 }}>
                     Confidence: {stepData.verdict.confidence}%
                   </div>
                 </motion.div>
@@ -1155,24 +1136,25 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           </AnimatePresence>
         </div>
 
-        {/* ── BOTTOM: VAR ASSISTANT ── */}
+        {/* VAR Assistant */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          {/* Header */}
+
+          {/* Assistant header */}
           <div style={{
-            padding: "13px 20px 11px",
-            borderBottom: `1px solid ${acc}0.08)`,
-            display: "flex", alignItems: "center", gap: "10px", flexShrink: 0,
+            padding: "14px 22px 12px",
+            borderBottom: `1px solid ${acc}0.09)`,
+            display: "flex", alignItems: "center", gap: "11px", flexShrink: 0,
           }}>
             <motion.div
               animate={{ opacity: [1, 0.2, 1] }}
               transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-              style={{ width: 7, height: 7, borderRadius: "50%", background: `${acc}0.65)`, flexShrink: 0 }}
+              style={{ width: 8, height: 8, borderRadius: "50%", background: `${acc}0.68)`, flexShrink: 0 }}
             />
             <div>
-              <div style={{ fontSize: "0.42rem", letterSpacing: "0.34em", color: `${acc}0.5)`, textTransform: "uppercase", fontWeight: 300 }}>
+              <div style={{ fontSize: "0.75rem", letterSpacing: "0.22em", color: `${acc}0.58)`, textTransform: "uppercase", fontWeight: 300 }}>
                 VAR Assistant
               </div>
-              <div style={{ fontSize: "0.35rem", letterSpacing: "0.12em", color: `${acc}0.2)`, marginTop: "1px" }}>
+              <div style={{ fontSize: "0.65rem", color: `${acc}0.25)`, marginTop: "2px" }}>
                 Granite · ibm/granite-3-3-8b-instruct
               </div>
             </div>
@@ -1185,33 +1167,32 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35 }}
                 style={{
-                  padding: msg.role === "assistant" ? "14px 20px" : "10px 20px",
+                  padding: msg.role === "assistant" ? "16px 22px" : "12px 22px",
                   borderBottom: `1px solid ${acc}0.04)`,
-                  background: msg.role === "user" ? `${acc}0.025)` : "transparent",
+                  background: msg.role === "user" ? `${acc}0.028)` : "transparent",
                 }}
               >
                 <div style={{
-                  fontSize: "0.36rem", letterSpacing: "0.32em", textTransform: "uppercase",
-                  color: msg.role === "assistant" ? `${acc}0.45)` : "rgba(255,255,255,0.2)",
-                  marginBottom: "6px", fontWeight: 300,
-                  display: "flex", alignItems: "center", gap: "6px",
+                  fontSize: "0.65rem", letterSpacing: "0.24em", textTransform: "uppercase",
+                  color: msg.role === "assistant" ? `${acc}0.5)` : "rgba(255,255,255,0.25)",
+                  marginBottom: "7px", fontWeight: 300,
+                  display: "flex", alignItems: "center", gap: "7px",
                 }}>
-                  <span style={{ display: "inline-block", width: 4, height: 4, borderRadius: "50%", background: msg.role === "assistant" ? `${acc}0.55)` : "rgba(255,255,255,0.25)", flexShrink: 0 }} />
+                  <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: msg.role === "assistant" ? `${acc}0.6)` : "rgba(255,255,255,0.3)", flexShrink: 0 }} />
                   {msg.role === "assistant" ? "VAR OFFICIAL" : "REVIEWING OFFICER"}
                 </div>
                 <p style={{
-                  fontSize: msg.role === "assistant" ? "0.64rem" : "0.56rem",
-                  letterSpacing: "0.022em",
-                  color: msg.role === "assistant" ? `${acc}0.82)` : "rgba(255,255,255,0.38)",
-                  lineHeight: 1.72, fontWeight: 300, margin: 0,
+                  fontSize: msg.role === "assistant" ? "0.88rem" : "0.82rem",
+                  color: msg.role === "assistant" ? `${acc}0.85)` : "rgba(255,255,255,0.42)",
+                  lineHeight: 1.75, fontWeight: 300, margin: 0,
                 }}>
                   {msg.text}
                 </p>
                 {msg.stepRef !== undefined && (
                   <div style={{
-                    marginTop: "8px", display: "inline-flex", alignItems: "center", gap: "5px",
-                    fontSize: "0.36rem", letterSpacing: "0.2em",
-                    color: `${acc}0.4)`, border: `1px solid ${acc}0.16)`, padding: "3px 8px", textTransform: "uppercase",
+                    marginTop: "9px", display: "inline-flex", alignItems: "center", gap: "6px",
+                    fontSize: "0.65rem", letterSpacing: "0.16em",
+                    color: `${acc}0.44)`, border: `1px solid ${acc}0.18)`, padding: "4px 10px", textTransform: "uppercase",
                   }}>
                     ↗ Navigated to Step {(msg.stepRef ?? 0) + 1}
                   </div>
@@ -1220,19 +1201,19 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             ))}
 
             {isLoading && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: "14px 20px" }}>
-                <div style={{ fontSize: "0.36rem", letterSpacing: "0.32em", textTransform: "uppercase", color: `${acc}0.45)`, marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: "16px 22px" }}>
+                <div style={{ fontSize: "0.65rem", letterSpacing: "0.24em", textTransform: "uppercase", color: `${acc}0.5)`, marginBottom: "9px", display: "flex", alignItems: "center", gap: "7px" }}>
                   <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.1, repeat: Infinity }}
-                    style={{ display: "inline-block", width: 4, height: 4, borderRadius: "50%", background: `${acc}0.55)` }}
+                    style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: `${acc}0.6)` }}
                   />
                   VAR OFFICIAL
                 </div>
-                <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   {[0, 0.18, 0.36].map(d => (
                     <motion.div key={d}
                       animate={{ opacity: [0.2, 0.8, 0.2], y: [0, -3, 0] }}
                       transition={{ duration: 1.0, repeat: Infinity, delay: d }}
-                      style={{ width: 4, height: 4, borderRadius: "50%", background: `${acc}0.45)` }}
+                      style={{ width: 5, height: 5, borderRadius: "50%", background: `${acc}0.48)` }}
                     />
                   ))}
                 </div>
@@ -1243,21 +1224,20 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
 
           {/* Quick prompts */}
           {messages.length <= 1 && !isLoading && (
-            <div style={{ padding: "10px 20px 8px", display: "flex", flexWrap: "wrap", gap: "6px", flexShrink: 0, borderTop: `1px solid ${acc}0.05)` }}>
-              <div style={{ width: "100%", fontSize: "0.34rem", letterSpacing: "0.22em", color: `${acc}0.22)`, textTransform: "uppercase", marginBottom: "3px" }}>
+            <div style={{ padding: "12px 22px 10px", display: "flex", flexWrap: "wrap", gap: "7px", flexShrink: 0, borderTop: `1px solid ${acc}0.06)` }}>
+              <div style={{ width: "100%", fontSize: "0.65rem", letterSpacing: "0.2em", color: `${acc}0.25)`, textTransform: "uppercase", marginBottom: "4px" }}>
                 Quick queries
               </div>
               {quickPrompts.map((q, i) => (
                 <button key={i}
                   onClick={() => { setInputValue(q); inputRef.current?.focus(); }}
                   style={{
-                    background: "none", border: `1px solid ${acc}0.12)`,
-                    color: `${acc}0.4)`, padding: "5px 10px",
-                    fontSize: "0.46rem", letterSpacing: "0.05em",
-                    cursor: "none", fontFamily: "inherit", transition: "all 0.2s",
+                    background: "none", border: `1px solid ${acc}0.14)`,
+                    color: `${acc}0.45)`, padding: "6px 12px",
+                    fontSize: "0.75rem", cursor: "none", fontFamily: "inherit", transition: "all 0.2s",
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${acc}0.3)`; e.currentTarget.style.color = `${acc}0.7)`; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${acc}0.12)`; e.currentTarget.style.color = `${acc}0.4)`; }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${acc}0.32)`; e.currentTarget.style.color = `${acc}0.75)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${acc}0.14)`; e.currentTarget.style.color = `${acc}0.45)`; }}
                 >
                   {q}
                 </button>
@@ -1267,7 +1247,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
 
           {/* Input */}
           <div style={{
-            padding: "11px 16px 13px", borderTop: `1px solid ${acc}0.08)`,
+            padding: "12px 16px 14px", borderTop: `1px solid ${acc}0.09)`,
             display: "flex", gap: "8px", alignItems: "center", flexShrink: 0,
           }}>
             <input
@@ -1277,37 +1257,37 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
               onKeyDown={e => { if (e.key === "Enter") sendMessage(); }}
               placeholder="Submit to VAR..."
               style={{
-                flex: 1, background: `${acc}0.05)`,
-                border: `1px solid ${acc}0.12)`, color: `${acc}0.85)`,
-                padding: "8px 12px", fontSize: "0.55rem", letterSpacing: "0.04em",
+                flex: 1, background: `${acc}0.06)`,
+                border: `1px solid ${acc}0.13)`, color: `${acc}0.88)`,
+                padding: "10px 14px", fontSize: "0.875rem",
                 fontFamily: "inherit", outline: "none", cursor: "text",
               }}
-              onFocus={e  => (e.target.style.borderColor = `${acc}0.32)`)}
-              onBlur={e   => (e.target.style.borderColor = `${acc}0.12)`)}
+              onFocus={e  => (e.target.style.borderColor = `${acc}0.34)`)}
+              onBlur={e   => (e.target.style.borderColor = `${acc}0.13)`)}
             />
             <button onClick={sendMessage} disabled={!inputValue.trim() || isLoading}
               style={{
                 background: !inputValue.trim() || isLoading ? "none" : `${acc}0.1)`,
-                border: `1px solid ${acc}${!inputValue.trim() || isLoading ? "0.08)" : "0.28)"}`,
-                color: `${acc}${!inputValue.trim() || isLoading ? "0.16)" : "0.78)"}`,
-                padding: "8px 14px", fontSize: "0.5rem", letterSpacing: "0.1em",
+                border: `1px solid ${acc}${!inputValue.trim() || isLoading ? "0.09)" : "0.28)"}`,
+                color: `${acc}${!inputValue.trim() || isLoading ? "0.18)" : "0.82)"}`,
+                padding: "10px 16px", fontSize: "0.82rem", letterSpacing: "0.08em",
                 cursor: "none", fontFamily: "inherit", transition: "all 0.2s",
                 textTransform: "uppercase", flexShrink: 0,
               }}
               onMouseEnter={e => { if (inputValue.trim() && !isLoading) { e.currentTarget.style.background = `${acc}0.18)`; e.currentTarget.style.color = `${acc}1)`; }}}
-              onMouseLeave={e => { if (inputValue.trim() && !isLoading) { e.currentTarget.style.background = `${acc}0.1)`; e.currentTarget.style.color = `${acc}0.78)`; }}}
+              onMouseLeave={e => { if (inputValue.trim() && !isLoading) { e.currentTarget.style.background = `${acc}0.1)`; e.currentTarget.style.color = `${acc}0.82)`; }}}
             >
               Send
             </button>
           </div>
 
           {/* Pitch key */}
-          <div style={{ padding: "9px 20px 11px", borderTop: `1px solid ${acc}0.06)`, flexShrink: 0 }}>
-            <div style={{ display: "flex", gap: "14px", flexWrap: "wrap" }}>
-              <PitchKeyRow color="rgba(255,255,255,0.7)"  label="Germany" />
-              <PitchKeyRow color="rgba(255,205,55,0.7)"   label="Brazil" />
-              <PitchKeyRow color="rgba(220,80,80,0.7)"    label="Offside" />
-              <PitchKeyRow color="rgba(255,200,80,0.68)"  label="Measure" />
+          <div style={{ padding: "10px 22px 13px", borderTop: `1px solid ${acc}0.07)`, flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+              <PitchKeyRow color="rgba(255,255,255,0.72)"  label="Germany" />
+              <PitchKeyRow color="rgba(255,205,55,0.72)"   label="Brazil" />
+              <PitchKeyRow color="rgba(220,80,80,0.72)"    label="Offside" />
+              <PitchKeyRow color="rgba(255,200,80,0.7)"    label="Measure" />
             </div>
           </div>
         </div>
@@ -1321,18 +1301,18 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
 
 function PitchLegendItem({ color, label, dash }: { color: string; label: string; dash?: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-      <div style={{ width: 16, height: 1.5, flexShrink: 0, background: dash ? "none" : color, borderTop: dash ? `1.5px dashed ${color}` : "none" }} />
-      <span style={{ fontSize: "0.38rem", letterSpacing: "0.15em", color: "rgba(168,196,224,0.3)", textTransform: "uppercase" }}>{label}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+      <div style={{ width: 18, height: 1.5, flexShrink: 0, background: dash ? "none" : color, borderTop: dash ? `1.5px dashed ${color}` : "none" }} />
+      <span style={{ fontSize: "0.65rem", letterSpacing: "0.12em", color: "rgba(168,196,224,0.38)", textTransform: "uppercase" }}>{label}</span>
     </div>
   );
 }
 
 function PitchKeyRow({ color, label }: { color: string; label: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-      <div style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: "0.38rem", letterSpacing: "0.1em", color: "rgba(168,196,224,0.25)" }}>{label}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+      <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: "0.65rem", letterSpacing: "0.08em", color: "rgba(168,196,224,0.3)" }}>{label}</span>
     </div>
   );
 }
