@@ -12,8 +12,8 @@ interface Props {
 const ZONES = [
   {
     id        : "referee"   as const,
-    label     : "REFEREE",
-    descriptor: "See every decision through the laws of the game",
+    label     : "REFEREE POV",
+    descriptor: "Experience the match through the laws of the game.",
     route     : "/referee",
     color     : [168, 196, 224] as [number, number, number],
     delay     : 0,
@@ -33,7 +33,7 @@ const ZONES = [
   {
     id        : "fan"       as const,
     label     : "NEW FAN",
-    descriptor: "Learn the beautiful game from the first whistle",
+    descriptor: "Learn football through every moment.",
     route     : "/fan",
     color     : [126, 207, 160] as [number, number, number],
     delay     : 0.12,
@@ -50,8 +50,8 @@ const ZONES = [
   },
   {
     id        : "supporter" as const,
-    label     : "SUPPORTER",
-    descriptor: "Feel the match through pure passion and emotion",
+    label     : "TEAM SUPPORTER",
+    descriptor: "Feel every decision through the heart of your club.",
     route     : "/supporter",
     color     : [232, 168, 124] as [number, number, number],
     delay     : 0.24,

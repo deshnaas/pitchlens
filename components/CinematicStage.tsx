@@ -9,6 +9,7 @@ import MouseLightEffect  from "./MouseLightEffect";
 import AtmosphericCanvas from "./AtmosphericCanvas";
 import TitleReveal       from "./TitleReveal";
 import LensPortals       from "./LensPortals";
+import StorySection      from "./StorySection";
 import ProgressBar       from "./ProgressBar";
 import CinematicCursor   from "./CinematicCursor";
 
@@ -42,6 +43,7 @@ export default function CinematicStage() {
   const parallax = useMouseParallax();
 
   const [videoPhase,     setVideoPhase]     = useState(0);
+  const [storyVisible,   setStoryVisible]   = useState(false);
   const [portalsVisible, setPortalsVisible] = useState(false);
   const [lensHover,      setLensHover]      = useState<"referee" | "fan" | "supporter" | null>(null);
 
@@ -50,11 +52,17 @@ export default function CinematicStage() {
   }, []);
 
   const handleComplete = useCallback(() => {
-    // v4 has started — portals emerge after a brief breath
-    setTimeout(() => setPortalsVisible(true), 900);
+    // v4 has started — story section emerges after a brief breath
+    setTimeout(() => setStoryVisible(true), 900);
   }, []);
 
-  const titlePhase = videoIndexToTitlePhase(videoPhase, portalsVisible);
+  const handleStoryComplete = useCallback(() => {
+    // Story done — hide story, reveal portals simultaneously
+    setStoryVisible(false);
+    setTimeout(() => setPortalsVisible(true), 400);
+  }, []);
+
+  const titlePhase = storyVisible ? 0 : videoIndexToTitlePhase(videoPhase, portalsVisible);
 
   // Derive current stage for phase-specific effects (0–4)
   const effectPhase = portalsVisible ? 4 : videoPhase;
@@ -88,13 +96,19 @@ export default function CinematicStage() {
       {/* ── Layer 5: PITCHLENS title — permanent, shrinks in portal mode ── */}
       <TitleReveal titlePhase={titlePhase} parallax={parallax} />
 
-      {/* ── Layer 6: Three Realities — atmospheric spatial zones ── */}
+      {/* ── Layer 6: Story interlude — ONE MOMENT. MANY REALITIES. ── */}
+      <StorySection
+        visible   = {storyVisible}
+        onComplete= {handleStoryComplete}
+      />
+
+      {/* ── Layer 7: Three Realities — atmospheric spatial zones ── */}
       <LensPortals
         visible      = {portalsVisible}
         onHoverChange= {setLensHover}
       />
 
-      {/* ── Layer 7: 1px cinematic progress bar ── */}
+      {/* ── Layer 8: 1px cinematic progress bar ── */}
       <ProgressBar phase={effectPhase} />
 
     </div>
