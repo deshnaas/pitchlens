@@ -39,12 +39,12 @@ function videoIndexToTitlePhase(videoIdx: number, portalsVisible: boolean): numb
   return 0;
 }
 
-export default function CinematicStage() {
+export default function CinematicStage({ skipToPortals = false }: { skipToPortals?: boolean }) {
   const parallax = useMouseParallax();
 
-  const [videoPhase,     setVideoPhase]     = useState(0);
+  const [videoPhase,     setVideoPhase]     = useState(skipToPortals ? 4 : 0);
   const [storyVisible,   setStoryVisible]   = useState(false);
-  const [portalsVisible, setPortalsVisible] = useState(false);
+  const [portalsVisible, setPortalsVisible] = useState(skipToPortals);
   const [lensHover,      setLensHover]      = useState<"referee" | "fan" | "supporter" | null>(null);
 
   const handlePhaseChange = useCallback((idx: number) => {

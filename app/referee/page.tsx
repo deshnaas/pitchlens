@@ -13,7 +13,7 @@ export default function RefereePage() {
       <IncidentEngine
         incident={offside001}
         pov="referee"
-        onBack={() => router.push("/")}
+        onBack={() => router.push("/?portals=true")}
       />
     </>
   );

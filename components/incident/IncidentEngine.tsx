@@ -4,7 +4,7 @@
  * IncidentEngine — The core investigation experience.
  *
  * Accepts any Incident and renders:
- *   Left  — step timeline + incident metadata
+ *   Left  — step timeline + VAR Assistant (Granite-powered)
  *   Centre — SVG pitch (always visible, always the hero)
  *   Right  — law references, evidence, verdict
  *
@@ -12,7 +12,7 @@
  * The pitch data is always identical — only the lens changes.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SVGPitch } from "@/components/pitch/SVGPitch";
 import type {
@@ -28,6 +28,7 @@ import type {
   MeasurementOverlay,
   POV,
 } from "@/lib/incidents/types";
+import type { VarChatResponse, VarAction } from "@/app/api/var-chat/route";
 
 // ── POV colour palettes ───────────────────────────────────────────────────────
 
@@ -61,7 +62,6 @@ function PlayerDot({
 
   return (
     <g style={{ opacity: dimmed ? 0.22 : 1 }}>
-      {/* Outer ring when highlighted */}
       {highlighted && (
         <motion.circle
           cx={player.x} cy={player.y}
@@ -81,8 +81,6 @@ function PlayerDot({
           }
         />
       )}
-
-      {/* Body dot */}
       <motion.circle
         cx={player.x} cy={player.y} r={r}
         fill={TEAM_FILL[player.team]}
@@ -90,8 +88,6 @@ function PlayerDot({
         animate={{ r }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       />
-
-      {/* Label */}
       {player.label && (
         <text
           x={player.x}
@@ -126,7 +122,7 @@ function BallDot({ ball }: { ball: Ball }) {
   );
 }
 
-// ── Overlay rendering — each type is a distinct SVG element ─────────────────
+// ── Overlay rendering ─────────────────────────────────────────────────────────
 
 function OverlayLayer({
   overlays,
@@ -135,14 +131,13 @@ function OverlayLayer({
 }: {
   overlays: Overlay[];
   players : Player[];
-  stepKey : number;
+  stepKey : number | string;
 }) {
   const getPlayer = (id: string) => players.find(p => p.id === id);
 
   return (
     <g key={stepKey}>
       {overlays.map((ov, i) => {
-        // ── Zone ──
         if (ov.type === "zone") {
           const o = ov as ZoneOverlay;
           return (
@@ -157,7 +152,6 @@ function OverlayLayer({
           );
         }
 
-        // ── Offside line ──
         if (ov.type === "offsideLine") {
           const o = ov as OffsideLineOverlay;
           return (
@@ -174,7 +168,6 @@ function OverlayLayer({
           );
         }
 
-        // ── Line (pass / trajectory) ──
         if (ov.type === "line") {
           const o = ov as LineOverlay;
           return (
@@ -193,7 +186,6 @@ function OverlayLayer({
           );
         }
 
-        // ── Player highlight ring ──
         if (ov.type === "highlight") {
           const o  = ov as HighlightOverlay;
           const pl = getPlayer(o.playerId);
@@ -222,7 +214,6 @@ function OverlayLayer({
           );
         }
 
-        // ── Label ──
         if (ov.type === "label") {
           const o = ov as LabelOverlay;
           return (
@@ -244,7 +235,6 @@ function OverlayLayer({
           );
         }
 
-        // ── Measurement ──
         if (ov.type === "measurement") {
           const o    = ov as MeasurementOverlay;
           const midX = (o.from.x + o.to.x) / 2;
@@ -253,35 +243,24 @@ function OverlayLayer({
           const labelY = o.side === "below" ? midY + 2 : midY - 1.2;
           return (
             <g key={`ms-${i}`}>
-              {/* Main dimension line */}
               <motion.path
                 d={`M ${o.from.x} ${o.from.y} L ${o.to.x} ${o.to.y}`}
-                stroke={color}
-                strokeWidth={0.38}
-                strokeDasharray="1.2 0.8"
-                fill="none"
+                stroke={color} strokeWidth={0.38} strokeDasharray="1.2 0.8" fill="none"
                 initial={{ pathLength: 0, opacity: 0 }}
                 animate={{ pathLength: 1, opacity: 1 }}
                 transition={{ duration: 0.6, ease: "easeInOut" }}
               />
-              {/* End caps */}
               <motion.path
                 d={`M ${o.from.x} ${o.from.y - 1.2} L ${o.from.x} ${o.from.y + 1.2} M ${o.to.x} ${o.to.y - 1.2} L ${o.to.x} ${o.to.y + 1.2}`}
-                stroke={color}
-                strokeWidth={0.3}
-                fill="none"
+                stroke={color} strokeWidth={0.3} fill="none"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3, delay: 0.55 }}
               />
-              {/* Label */}
               <motion.text
                 x={midX} y={labelY}
-                fill={color}
-                fontSize={1.9}
-                textAnchor="middle"
-                fontFamily="Inter, sans-serif"
-                fontWeight={300}
+                fill={color} fontSize={1.9} textAnchor="middle"
+                fontFamily="Inter, sans-serif" fontWeight={300}
                 style={{ userSelect: "none" }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -299,6 +278,34 @@ function OverlayLayer({
   );
 }
 
+// ── Chat types ────────────────────────────────────────────────────────────────
+
+interface ChatMessage {
+  role     : "assistant" | "user";
+  text     : string;
+  stepRef? : number;   // which step the assistant referenced
+  timestamp: number;
+}
+
+// ── Build incident context string for Granite ─────────────────────────────────
+
+function buildIncidentContext(incident: Incident): string {
+  const players = incident.players
+    .map(p => `  ${p.name ?? p.id} (${p.team}, ${p.role ?? "player"}) at x=${p.x}m y=${p.y}m`)
+    .join("\n");
+  return `Incident: ${incident.title}
+Match: ${incident.matchContext.teams[0]} vs ${incident.matchContext.teams[1]}, ${incident.matchContext.minute}', Score: ${incident.matchContext.score}
+Type: ${incident.type}
+Attacking direction: ${incident.attackingDirection}
+Ball position at moment of pass: x=${incident.ball.x}m, y=${incident.ball.y}m
+
+Players:
+${players}
+
+Steps:
+${incident.steps.map((s, i) => `  ${i + 1}. ${s.label}: ${s.title}`).join("\n")}`;
+}
+
 // ── Main IncidentEngine component ────────────────────────────────────────────
 
 interface IncidentEngineProps {
@@ -308,14 +315,37 @@ interface IncidentEngineProps {
 }
 
 export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEngineProps) {
-  const [step, setStep] = useState(0);
-  const palette = POV_PALETTE[pov];
+  const [step,             setStep]             = useState(0);
+  const [messages,         setMessages]         = useState<ChatMessage[]>([]);
+  const [inputValue,       setInputValue]       = useState("");
+  const [isLoading,        setIsLoading]        = useState(false);
+  const [assistantHighlights, setAssistantHighlights] = useState<string[]>([]);
 
-  const stepData   = incident.steps[step];
-  const isLastStep = step === incident.steps.length - 1;
-  const isFirstStep= step === 0;
+  const palette  = POV_PALETTE[pov];
+  const stepData = incident.steps[step];
+  const isLastStep  = step === incident.steps.length - 1;
+  const isFirstStep = step === 0;
 
-  // Which players are highlighted and should others be dimmed
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef       = useRef<HTMLInputElement>(null);
+  const incidentContext = buildIncidentContext(incident);
+
+  // Scroll messages to bottom whenever they change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Initial assistant greeting when incident loads
+  useEffect(() => {
+    const greeting: ChatMessage = {
+      role     : "assistant",
+      text     : `The attacker appears beyond the second-last defender at the moment the pass was played. Reviewing Law 11 evidence now. Would you like me to walk you through the offside determination?`,
+      timestamp: Date.now(),
+    };
+    setMessages([greeting]);
+  }, [incident.id]);
+
+  // Which players are highlighted (from step overlays + assistant overrides)
   const highlightMap = new Map<string, { color: string; pulse: boolean }>();
   stepData.overlays.forEach(ov => {
     if (ov.type === "highlight") {
@@ -323,19 +353,21 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
       highlightMap.set(o.playerId, { color: o.color, pulse: !!o.pulse });
     }
   });
+  // Assistant temporary highlights (golden ring)
+  assistantHighlights.forEach(id => {
+    if (!highlightMap.has(id)) {
+      highlightMap.set(id, { color: "rgba(255,200,80,0.9)", pulse: true });
+    }
+  });
   const hasHighlights = highlightMap.size > 0;
 
-  const goNext = useCallback(() => {
-    setStep(s => Math.min(s + 1, incident.steps.length - 1));
-  }, [incident.steps.length]);
-
-  const goPrev = useCallback(() => {
-    setStep(s => Math.max(s - 1, 0));
-  }, []);
+  const goNext = useCallback(() => setStep(s => Math.min(s + 1, incident.steps.length - 1)), [incident.steps.length]);
+  const goPrev = useCallback(() => setStep(s => Math.max(s - 1, 0)), []);
 
   // Keyboard navigation
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (document.activeElement === inputRef.current) return; // don't interfere with typing
       if (["ArrowRight", "ArrowDown", " "].includes(e.key)) { e.preventDefault(); goNext(); }
       if (["ArrowLeft",  "ArrowUp"       ].includes(e.key)) { e.preventDefault(); goPrev(); }
     };
@@ -343,7 +375,71 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     return () => window.removeEventListener("keydown", onKey);
   }, [goNext, goPrev]);
 
+  // Apply assistant action to pitch
+  const applyAction = useCallback((action: VarAction | null) => {
+    if (!action) return;
+    if (action.type === "goToStep" && typeof action.value === "number") {
+      setStep(Math.max(0, Math.min(action.value, incident.steps.length - 1)));
+    }
+    if (action.type === "highlight" && Array.isArray(action.players)) {
+      setAssistantHighlights(action.players);
+      // Clear after 6 seconds
+      setTimeout(() => setAssistantHighlights([]), 6000);
+    }
+  }, [incident.steps.length]);
+
+  const sendMessage = useCallback(async () => {
+    const msg = inputValue.trim();
+    if (!msg || isLoading) return;
+
+    setInputValue("");
+    setAssistantHighlights([]); // clear previous highlights
+
+    const userMsg: ChatMessage = { role: "user", text: msg, timestamp: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
+    setIsLoading(true);
+
+    try {
+      const res = await fetch("/api/var-chat", {
+        method : "POST",
+        headers: { "Content-Type": "application/json" },
+        body   : JSON.stringify({
+          message        : msg,
+          incidentContext,
+          currentStep    : step,
+          stepLabel      : stepData.label,
+          stepTitle      : stepData.title,
+        }),
+      });
+      const data = await res.json() as VarChatResponse;
+      const assistantMsg: ChatMessage = {
+        role     : "assistant",
+        text     : data.text,
+        stepRef  : data.action?.type === "goToStep" ? (data.action.value ?? undefined) : undefined,
+        timestamp: Date.now(),
+      };
+      setMessages(prev => [...prev, assistantMsg]);
+      applyAction(data.action);
+    } catch {
+      setMessages(prev => [...prev, {
+        role     : "assistant",
+        text     : "Analysis feed interrupted. Check the investigation timeline.",
+        timestamp: Date.now(),
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [inputValue, isLoading, incidentContext, step, stepData, applyAction]);
+
   const acc = `rgba(${palette.accent},`;
+
+  // ── Suggested quick prompts ──────────────────────────────────────────────────
+  const quickPrompts = [
+    "Why is this offside?",
+    "Show me the evidence",
+    "Who is the last defender?",
+    "Explain the law",
+  ];
 
   return (
     <div
@@ -352,27 +448,27 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     >
 
       {/* ══════════════════════════════════════════════════════
-          LEFT — Investigation timeline
+          LEFT — Investigation timeline + VAR Assistant
       ══════════════════════════════════════════════════════ */}
       <nav
         style={{
-          width       : "216px",
-          flexShrink  : 0,
-          background  : "rgba(0,6,18,0.94)",
-          borderRight : `1px solid ${acc}0.07)`,
-          display     : "flex",
-          flexDirection:"column",
+          width        : "248px",
+          flexShrink   : 0,
+          background   : "rgba(0,6,18,0.94)",
+          borderRight  : `1px solid ${acc}0.07)`,
+          display      : "flex",
+          flexDirection: "column",
         }}
       >
-        {/* Header */}
-        <div style={{ padding: "22px 18px 16px", borderBottom: `1px solid ${acc}0.07)` }}>
+        {/* ── Header ── */}
+        <div style={{ padding: "20px 18px 14px", borderBottom: `1px solid ${acc}0.07)`, flexShrink: 0 }}>
           <button
             onClick={onBack}
             style={{
               background: "none", border: "none", padding: 0, cursor: "none",
               color     : `${acc}0.35)`, fontSize: "0.46rem",
               letterSpacing: "0.3em", textTransform: "uppercase",
-              display: "block", marginBottom: "18px",
+              display: "block", marginBottom: "16px",
               transition: "color 0.25s",
             }}
             onMouseEnter={e => (e.currentTarget.style.color = `${acc}0.72)`)}
@@ -383,16 +479,16 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           <div style={{ fontSize: "0.42rem", letterSpacing: "0.36em", color: `${acc}0.32)`, textTransform: "uppercase" }}>
             VAR Investigation
           </div>
-          <div style={{ fontSize: "0.72rem", letterSpacing: "0.1em", color: `${acc}0.75)`, marginTop: "6px", fontWeight: 300 }}>
+          <div style={{ fontSize: "0.7rem", letterSpacing: "0.1em", color: `${acc}0.75)`, marginTop: "5px", fontWeight: 300 }}>
             {incident.matchContext.teams[0]} vs {incident.matchContext.teams[1]}
           </div>
-          <div style={{ fontSize: "0.42rem", letterSpacing: "0.18em", color: `${acc}0.28)`, marginTop: "4px" }}>
+          <div style={{ fontSize: "0.42rem", letterSpacing: "0.18em", color: `${acc}0.28)`, marginTop: "3px" }}>
             {incident.matchContext.minute}&apos; — {incident.matchContext.score} — {incident.title}
           </div>
         </div>
 
-        {/* Steps */}
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        {/* ── Step timeline (compact, max-height) ── */}
+        <div style={{ flexShrink: 0, overflowY: "auto", maxHeight: "210px", borderBottom: `1px solid ${acc}0.07)` }}>
           {incident.steps.map((s, i) => {
             const isActive = i === step;
             const isPast   = i < step;
@@ -406,21 +502,21 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                   border         : "none",
                   borderLeft     : isActive ? `2px solid ${acc}0.72)` : "2px solid transparent",
                   backgroundColor: isActive ? `${acc}0.05)` : "transparent",
-                  padding        : "14px 18px",
+                  padding        : "11px 16px",
                   display        : "flex",
                   alignItems     : "flex-start",
-                  gap            : "12px",
+                  gap            : "11px",
                   textAlign      : "left",
                   cursor         : "none",
                   transition     : "background-color 0.25s, border-color 0.25s",
                 }}
               >
                 <span style={{
-                  fontSize     : "0.56rem",
+                  fontSize     : "0.54rem",
                   letterSpacing: "0.1em",
                   color        : isActive ? `${acc}0.9)` : isPast ? `${acc}0.4)` : `${acc}0.18)`,
                   fontWeight   : 300,
-                  minWidth     : "22px",
+                  minWidth     : "20px",
                   paddingTop   : "1px",
                   transition   : "color 0.25s",
                 }}>
@@ -428,7 +524,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                 </span>
                 <div>
                   <div style={{
-                    fontSize     : "0.5rem",
+                    fontSize     : "0.48rem",
                     letterSpacing: "0.18em",
                     textTransform: "uppercase",
                     color        : isActive ? `${acc}0.85)` : isPast ? `${acc}0.35)` : `${acc}0.18)`,
@@ -444,14 +540,14 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit   ={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.3 }}
+                        transition={{ duration: 0.28 }}
                         style={{
-                          fontSize     : "0.42rem",
+                          fontSize     : "0.4rem",
                           letterSpacing: "0.04em",
-                          color        : `${acc}0.36)`,
-                          marginTop    : "5px",
-                          lineHeight   : 1.55,
-                          maxWidth     : "140px",
+                          color        : `${acc}0.34)`,
+                          marginTop    : "4px",
+                          lineHeight   : 1.5,
+                          maxWidth     : "130px",
                           overflow     : "hidden",
                         }}
                       >
@@ -465,9 +561,208 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           })}
         </div>
 
-        {/* Progress bar */}
-        <div style={{ padding: "14px 18px", borderTop: `1px solid ${acc}0.07)` }}>
-          <div style={{ display: "flex", gap: "5px" }}>
+        {/* ── VAR ASSISTANT divider ── */}
+        <div style={{
+          padding     : "10px 16px 8px",
+          display     : "flex",
+          alignItems  : "center",
+          gap         : "8px",
+          flexShrink  : 0,
+        }}>
+          <motion.div
+            animate={{ opacity: [1, 0.3, 1] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+            style={{ width: 5, height: 5, borderRadius: "50%", background: `${acc}0.65)`, flexShrink: 0 }}
+          />
+          <span style={{
+            fontSize     : "0.4rem",
+            letterSpacing: "0.34em",
+            color        : `${acc}0.32)`,
+            textTransform: "uppercase",
+            fontWeight   : 300,
+          }}>
+            VAR Assistant
+          </span>
+        </div>
+
+        {/* ── Messages log ── */}
+        <div
+          style={{
+            flex     : 1,
+            overflowY: "auto",
+            padding  : "0 0 4px",
+            display  : "flex",
+            flexDirection: "column",
+            gap      : 0,
+            scrollbarWidth: "none",
+          }}
+        >
+          {messages.map((msg, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ padding: "8px 16px" }}
+            >
+              {/* Role label */}
+              <div style={{
+                fontSize     : "0.36rem",
+                letterSpacing: "0.32em",
+                textTransform: "uppercase",
+                color        : msg.role === "assistant" ? `${acc}0.45)` : "rgba(255,255,255,0.22)",
+                marginBottom : "4px",
+                fontWeight   : 300,
+              }}>
+                {msg.role === "assistant" ? "VAR ▸" : "YOU ▸"}
+              </div>
+              {/* Message text */}
+              <p style={{
+                fontSize     : "0.52rem",
+                letterSpacing: "0.025em",
+                color        : msg.role === "assistant" ? `${acc}0.78)` : "rgba(255,255,255,0.42)",
+                lineHeight   : 1.65,
+                fontWeight   : 300,
+                margin       : 0,
+              }}>
+                {msg.text}
+              </p>
+              {/* Step reference badge */}
+              {msg.stepRef !== undefined && (
+                <div style={{
+                  marginTop    : "5px",
+                  display      : "inline-block",
+                  fontSize     : "0.36rem",
+                  letterSpacing: "0.2em",
+                  color        : `${acc}0.4)`,
+                  border       : `1px solid ${acc}0.18)`,
+                  padding      : "2px 6px",
+                  textTransform: "uppercase",
+                }}>
+                  → Step {(msg.stepRef ?? 0) + 1}
+                </div>
+              )}
+            </motion.div>
+          ))}
+
+          {/* Loading indicator */}
+          {isLoading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              style={{ padding: "8px 16px" }}
+            >
+              <div style={{
+                fontSize     : "0.36rem",
+                letterSpacing: "0.32em",
+                textTransform: "uppercase",
+                color        : `${acc}0.45)`,
+                marginBottom : "4px",
+              }}>
+                VAR ▸
+              </div>
+              <motion.div
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+                style={{
+                  fontSize : "0.52rem",
+                  color    : `${acc}0.45)`,
+                  fontWeight: 300,
+                }}
+              >
+                Analysing...
+              </motion.div>
+            </motion.div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* ── Quick prompts ── */}
+        {messages.length <= 1 && !isLoading && (
+          <div style={{ padding: "0 12px 8px", display: "flex", flexWrap: "wrap", gap: "5px", flexShrink: 0 }}>
+            {quickPrompts.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => { setInputValue(q); inputRef.current?.focus(); }}
+                style={{
+                  background   : "none",
+                  border       : `1px solid ${acc}0.12)`,
+                  color        : `${acc}0.38)`,
+                  padding      : "3px 7px",
+                  fontSize     : "0.38rem",
+                  letterSpacing: "0.06em",
+                  cursor       : "none",
+                  fontFamily   : "inherit",
+                  transition   : "all 0.2s",
+                  textAlign    : "left",
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = `${acc}0.3)`;
+                  e.currentTarget.style.color = `${acc}0.65)`;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = `${acc}0.12)`;
+                  e.currentTarget.style.color = `${acc}0.38)`;
+                }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── Input ── */}
+        <div style={{
+          padding    : "8px 12px 10px",
+          borderTop  : `1px solid ${acc}0.07)`,
+          display    : "flex",
+          gap        : "8px",
+          alignItems : "center",
+          flexShrink : 0,
+        }}>
+          <input
+            ref={inputRef}
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") sendMessage(); }}
+            placeholder="Ask the VAR..."
+            style={{
+              flex         : 1,
+              background   : `${acc}0.05)`,
+              border       : `1px solid ${acc}0.12)`,
+              color        : `${acc}0.8)`,
+              padding      : "6px 9px",
+              fontSize     : "0.5rem",
+              letterSpacing: "0.04em",
+              fontFamily   : "inherit",
+              outline      : "none",
+              cursor       : "text",
+            }}
+            onFocus={e => (e.target.style.borderColor = `${acc}0.3)`)}
+            onBlur={e  => (e.target.style.borderColor = `${acc}0.12)`)}
+          />
+          <button
+            onClick={sendMessage}
+            disabled={!inputValue.trim() || isLoading}
+            style={{
+              background   : `${acc}${!inputValue.trim() || isLoading ? "0.06)" : "0.15)"}`,
+              border       : `1px solid ${acc}${!inputValue.trim() || isLoading ? "0.1)" : "0.28)"}`,
+              color        : `${acc}${!inputValue.trim() || isLoading ? "0.2)" : "0.72)"}`,
+              padding      : "6px 10px",
+              fontSize     : "0.5rem",
+              cursor       : "none",
+              fontFamily   : "inherit",
+              transition   : "all 0.2s",
+              flexShrink   : 0,
+            }}
+          >
+            ▶
+          </button>
+        </div>
+
+        {/* ── Progress pills ── */}
+        <div style={{ padding: "10px 16px 12px", borderTop: `1px solid ${acc}0.07)`, flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: "4px" }}>
             {incident.steps.map((_, i) => (
               <motion.div
                 key={i}
@@ -480,7 +775,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
               />
             ))}
           </div>
-          <div style={{ fontSize: "0.4rem", letterSpacing: "0.2em", color: `${acc}0.22)`, marginTop: "8px" }}>
+          <div style={{ fontSize: "0.4rem", letterSpacing: "0.2em", color: `${acc}0.22)`, marginTop: "6px" }}>
             Step {step + 1} of {incident.steps.length}
           </div>
         </div>
@@ -527,11 +822,11 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           </span>
         </div>
 
-        {/* ── THE PITCH ── */}
+        {/* THE PITCH */}
         <div style={{ flex: 1, padding: "20px 16px 8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ width: "100%", maxHeight: "100%", aspectRatio: "115/76" }}>
             <SVGPitch>
-              {/* Overlays FIRST (behind players) */}
+              {/* Step overlays */}
               <AnimatePresence mode="wait">
                 <OverlayLayer
                   key={`ov-${step}`}
@@ -541,8 +836,23 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                 />
               </AnimatePresence>
 
+              {/* Assistant-triggered highlight overlays (golden, temporary) */}
+              {assistantHighlights.length > 0 && (
+                <OverlayLayer
+                  key={`asst-hl-${assistantHighlights.join("-")}`}
+                  overlays={assistantHighlights.map(id => ({
+                    type    : "highlight" as const,
+                    playerId: id,
+                    color   : "rgba(255,200,80,0.95)",
+                    pulse   : true,
+                  }))}
+                  players={incident.players}
+                  stepKey={`asst-${assistantHighlights.join("-")}`}
+                />
+              )}
+
               {/* Players */}
-              {incident.players.map((pl, idx) => {
+              {incident.players.map((pl) => {
                 const hl = highlightMap.get(pl.id);
                 return (
                   <PlayerDot
@@ -656,13 +966,13 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
       ══════════════════════════════════════════════════════ */}
       <aside
         style={{
-          width      : "282px",
-          flexShrink : 0,
-          background : "rgba(0,6,18,0.94)",
-          borderLeft : `1px solid ${acc}0.07)`,
-          display    : "flex",
+          width        : "282px",
+          flexShrink   : 0,
+          background   : "rgba(0,6,18,0.94)",
+          borderLeft   : `1px solid ${acc}0.07)`,
+          display      : "flex",
           flexDirection: "column",
-          overflowY  : "auto",
+          overflowY    : "auto",
         }}
       >
         {/* Step heading */}
@@ -678,12 +988,12 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
               exit   ={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.4 }}
               style={{
-                fontSize  : "clamp(0.82rem, 1.15vw, 1rem)",
-                fontWeight: 300,
+                fontSize     : "clamp(0.82rem, 1.15vw, 1rem)",
+                fontWeight   : 300,
                 letterSpacing: "0.03em",
-                color     : `${acc}0.92)`,
-                lineHeight: 1.3,
-                margin    : "8px 0 0",
+                color        : `${acc}0.92)`,
+                lineHeight   : 1.3,
+                margin       : "8px 0 0",
               }}
             >
               {stepData.title}
@@ -702,7 +1012,6 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
               transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
               style={{ display: "flex", flexDirection: "column", gap: "14px" }}
             >
-              {/* Body */}
               <p style={{
                 fontSize     : "0.62rem",
                 letterSpacing: "0.03em",
@@ -713,7 +1022,6 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                 {stepData.body}
               </p>
 
-              {/* Law reference block */}
               {stepData.lawRef && (
                 <div style={{
                   background: `${acc}0.05)`,
@@ -739,7 +1047,6 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                 </div>
               )}
 
-              {/* Technical data */}
               {stepData.technical && (
                 <div style={{
                   background: "rgba(255,255,255,0.025)",
@@ -766,7 +1073,6 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                 </div>
               )}
 
-              {/* Verdict */}
               {stepData.verdict && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.96 }}
@@ -815,7 +1121,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           </AnimatePresence>
         </div>
 
-        {/* Pitch key (bottom of right panel) */}
+        {/* Pitch key */}
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${acc}0.07)` }}>
           <div style={{ fontSize: "0.38rem", letterSpacing: "0.3em", color: `${acc}0.2)`, textTransform: "uppercase", marginBottom: "9px" }}>
             Pitch Key
