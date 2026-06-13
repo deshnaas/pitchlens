@@ -6,10 +6,12 @@ import { motion, AnimatePresence } from "framer-motion";
 /**
  * StorySection — "ONE MOMENT. MANY REALITIES."
  *
- * 8 cinematic scenes inserted between the video intro and the portal selection.
- * Left: narrative text. Right: living canvas animation per scene.
- * Navigation: scroll wheel accumulator (threshold 80), arrow keys, touch.
- * Final scene triggers onComplete → portals appear.
+ * One continuous world. The camera travels through a branching structure.
+ * The structure is always visible. Content appears at destinations inside it.
+ * No slides. No sections. No presentations. Camera movement IS the navigation.
+ *
+ * World space: y grows downward. Camera lerps toward CAMERA_STEPS[step].
+ * Canvas draws the full tree at every frame; camera transform pans/zooms.
  */
 
 interface Props {
@@ -17,421 +19,326 @@ interface Props {
   onComplete: () => void;
 }
 
-// ── Scene definitions ─────────────────────────────────────────────────────────
+// ── World-space node positions ────────────────────────────────────────────────
 
-interface Scene {
-  id       : number;
-  bg       : string;
-  accent   : string; // rgba string for canvas tint
-  kicker   : string;
-  headline : string;
-  body     : string;
-  canvasKey: string; // identifies which canvas draw fn to use
+const N = {
+  root:      { x: 0,    y: -480 },
+  miss:      { x: 0,    y: -180 },
+  fracture:  { x: 0,    y:  100 },
+  referee:   { x: -340, y:  390 },
+  fan:       { x: 0,    y:  390 },
+  supporter: { x: 340,  y:  390 },
+  reveal:    { x: 0,    y:  580 },
+};
+
+// ── Camera positions per step ─────────────────────────────────────────────────
+// x, y = world-space focus point (maps to screen centre)
+// zoom = canvas scale
+
+const CAMERA_STEPS = [
+  { x: 0,    y: -480, zoom: 1.05 },  // 0  root — penalty awarded
+  { x: 0,    y: -180, zoom: 1.25 },  // 1  miss — ball drifts wide
+  { x: 0,    y:  100, zoom: 0.80 },  // 2  fracture — zoom out, see 3 branches
+  { x: -340, y:  390, zoom: 1.55 },  // 3  referee node
+  { x: 0,    y:  390, zoom: 1.55 },  // 4  fan node
+  { x: 340,  y:  390, zoom: 1.55 },  // 5  supporter node
+  { x: 0,    y:  520, zoom: 0.55 },  // 6  full tree reveal — all paths glowing
+] as const;
+
+// ── Content at each step ──────────────────────────────────────────────────────
+
+const STEPS = [
+  {
+    kicker : "72'",
+    headline: "Germany are awarded a penalty.",
+    body   : "Kai Havertz steps up. The stadium holds its breath.",
+    accent : "rgba(255,255,255,0.7)",
+    node   : "root",
+  },
+  {
+    kicker : "72' 14\"",
+    headline: "He misses.",
+    body   : "The ball drifts wide. A moment that means a thousand different things.",
+    accent : "rgba(200,210,255,0.7)",
+    node   : "miss",
+  },
+  {
+    kicker : "ONE MOMENT.  MANY REALITIES.",
+    headline: "The same event. Three completely different worlds.",
+    body   : "Where you stand changes everything you see.",
+    accent : "rgba(180,200,255,0.65)",
+    node   : "fracture",
+  },
+  {
+    kicker : "REFEREE POV",
+    headline: "The penalty was correctly awarded. Play continues.",
+    body   : "Laws applied. Process followed. Decision documented. Correct.",
+    accent : "rgba(168,196,224,0.85)",
+    node   : "referee",
+  },
+  {
+    kicker : "NEW FAN",
+    headline: "Germany had a chance. Havertz missed.",
+    body   : "A penalty is a free kick on goal from twelve yards. The goalkeeper guessed right.",
+    accent : "rgba(126,207,160,0.85)",
+    node   : "fan",
+  },
+  {
+    kicker : "TEAM SUPPORTER",
+    headline: "NOOO. How did he miss that?",
+    body   : "That was THE chance. I can't even look.",
+    accent : "rgba(232,168,124,0.85)",
+    node   : "supporter",
+  },
+  {
+    kicker : "ONE EVENT.  MULTIPLE TRUTHS.",
+    headline: "This is PitchLens.",
+    body   : "Choose your reality.",
+    accent : "rgba(255,255,255,0.6)",
+    node   : "reveal",
+  },
+] as const;
+
+// ── Node colours ──────────────────────────────────────────────────────────────
+
+const NODE_COLORS: Record<string, [number,number,number]> = {
+  root:      [255, 255, 255],
+  miss:      [200, 210, 255],
+  fracture:  [180, 200, 255],
+  referee:   [168, 196, 224],
+  fan:       [126, 207, 160],
+  supporter: [232, 168, 124],
+  reveal:    [255, 255, 255],
+};
+
+// ── Particle pool ─────────────────────────────────────────────────────────────
+
+interface Particle {
+  pathIdx: number;
+  t      : number;  // 0→1 progress along path
+  speed  : number;
+  alpha  : number;
 }
 
-const SCENES: Scene[] = [
-  {
-    id      : 0,
-    bg      : "rgba(0,0,0,0.87)",
-    accent  : "rgba(255,255,255,0.6)",
-    kicker  : "72'",
-    headline: "Germany are awarded a penalty.",
-    body    : "Kai Havertz steps up. The stadium holds its breath. One kick. Everything in the balance.",
-    canvasKey: "anticipation",
-  },
-  {
-    id      : 1,
-    bg      : "rgba(4,4,18,0.90)",
-    accent  : "rgba(200,200,255,0.6)",
-    kicker  : "72' 14\"",
-    headline: "He misses.",
-    body    : "The ball drifts wide. A moment that means a thousand different things to a thousand different people.",
-    canvasKey: "miss",
-  },
-  {
-    id      : 2,
-    bg      : "rgba(4,4,22,0.92)",
-    accent  : "rgba(180,200,255,0.5)",
-    kicker  : "ONE MOMENT.  MANY REALITIES.",
-    headline: "The same event. Three completely different worlds.",
-    body    : "Where you stand changes everything you see.",
-    canvasKey: "fracture",
-  },
-  {
-    id      : 3,
-    bg      : "rgba(0,16,52,0.91)",
-    accent  : "rgba(168,196,224,0.7)",
-    kicker  : "REFEREE POV",
-    headline: "The penalty was correctly awarded. Play continues.",
-    body    : "Laws applied. Process followed. The decision is documented, analysed, archived. Correct.",
-    canvasKey: "referee",
-  },
-  {
-    id      : 4,
-    bg      : "rgba(0,32,16,0.90)",
-    accent  : "rgba(126,207,160,0.7)",
-    kicker  : "NEW FAN",
-    headline: "Germany had a chance to score. Kai Havertz took the shot but missed.",
-    body    : "A penalty is a free kick on goal from twelve yards. The goalkeeper guessed right.",
-    canvasKey: "fan",
-  },
-  {
-    id      : 5,
-    bg      : "rgba(52,16,0,0.91)",
-    accent  : "rgba(232,168,124,0.7)",
-    kicker  : "TEAM SUPPORTER",
-    headline: "NOOO. How did he miss that?",
-    body    : "That was our chance. That was THE chance. I can't even look. Someone hold me.",
-    canvasKey: "supporter",
-  },
-  {
-    id      : 6,
-    bg      : "rgba(24,8,0,0.90)",
-    accent  : "rgba(200,160,80,0.6)",
-    kicker  : "ONE MOMENT",
-    headline: "Two sides of the same pitch.",
-    body    : "Every decision divides a stadium. One reality fractures into many — instantly, permanently.",
-    canvasKey: "split",
-  },
-  {
-    id      : 7,
-    bg      : "rgba(0,4,12,0.93)",
-    accent  : "rgba(255,255,255,0.55)",
-    kicker  : "ONE EVENT.  MULTIPLE TRUTHS.",
-    headline: "This is PitchLens.",
-    body    : "Choose your reality.",
-    canvasKey: "reveal",
-  },
+function initParticles(): Particle[] {
+  const ps: Particle[] = [];
+  for (let pi = 0; pi < 5; pi++) {
+    for (let i = 0; i < 6; i++) {
+      ps.push({ pathIdx: pi, t: Math.random(), speed: 0.0004 + Math.random() * 0.0003, alpha: 0.4 + Math.random() * 0.5 });
+    }
+  }
+  return ps;
+}
+
+// ── Bezier helpers ────────────────────────────────────────────────────────────
+
+function bezierPoint(t: number, p0: {x:number,y:number}, cp: {x:number,y:number}, p1: {x:number,y:number}) {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * p0.x + 2 * mt * t * cp.x + t * t * p1.x,
+    y: mt * mt * p0.y + 2 * mt * t * cp.y + t * t * p1.y,
+  };
+}
+
+// Path definitions: [from, controlPoint, to, colorKey]
+const PATHS = [
+  { from: N.root,      cp: { x: 0,    y: -330 }, to: N.miss,      color: "white" },
+  { from: N.miss,      cp: { x: 0,    y: -40  }, to: N.fracture,  color: "white" },
+  { from: N.fracture,  cp: { x: -200, y: 220  }, to: N.referee,   color: "referee" },
+  { from: N.fracture,  cp: { x: 0,    y: 260  }, to: N.fan,       color: "fan" },
+  { from: N.fracture,  cp: { x: 200,  y: 220  }, to: N.supporter, color: "supporter" },
 ];
 
-// ── Canvas draw functions ─────────────────────────────────────────────────────
+const PATH_COLORS: Record<string, [number,number,number]> = {
+  white    : [220, 230, 255],
+  referee  : [168, 196, 224],
+  fan      : [126, 207, 160],
+  supporter: [232, 168, 124],
+};
 
-function drawAnticipation(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2;
-  const pulse = 0.85 + 0.15 * Math.sin(t * 0.0025);
+// ── Canvas draw ───────────────────────────────────────────────────────────────
 
-  // Pulsing orb
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 90 * pulse);
-  grad.addColorStop(0, "rgba(255,255,255,0.18)");
-  grad.addColorStop(0.5, "rgba(200,210,255,0.06)");
-  grad.addColorStop(1, "transparent");
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 90 * pulse, 0, Math.PI * 2);
-  ctx.fill();
+function drawWorld(
+  ctx    : CanvasRenderingContext2D,
+  sw     : number,  // screen width
+  sh     : number,  // screen height
+  camX   : number,
+  camY   : number,
+  zoom   : number,
+  t      : number,  // elapsed ms
+  step   : number,
+  particles: Particle[],
+) {
+  ctx.clearRect(0, 0, sw, sh);
 
-  // Expanding rings
-  for (let r = 1; r <= 3; r++) {
-    const radius = (40 + r * 38) * pulse;
-    ctx.strokeStyle = `rgba(255,255,255,${0.28 - r * 0.07})`;
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.stroke();
+  // Camera transform: world → screen
+  // screen_pos = (world_pos - cam) * zoom + screenCenter
+  const scx = sw / 2;
+  const scy = sh / 2;
+
+  function w2s(wx: number, wy: number) {
+    return {
+      x: (wx - camX) * zoom + scx,
+      y: (wy - camY) * zoom + scy,
+    };
   }
 
-  // Centre dot
-  ctx.fillStyle = "rgba(255,255,255,0.7)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-  ctx.fill();
-}
+  // ── Draw paths ──
+  PATHS.forEach((path, pi) => {
+    const [r, g, b] = PATH_COLORS[path.color];
 
-function drawMiss(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2;
-  const age = Math.min(t / 1200, 1); // 0→1 over 1.2s after mount
+    // Determine visibility / brightness based on step
+    let baseAlpha = 0.18;
+    if (step >= 2) baseAlpha = 0.35; // fracture onwards: full tree visible
+    // Highlight active branch
+    if (step === 3 && pi === 2) baseAlpha = 0.75;
+    if (step === 4 && pi === 3) baseAlpha = 0.75;
+    if (step === 5 && pi === 4) baseAlpha = 0.75;
+    if (step === 6) baseAlpha = 0.55;
 
-  // Arc of the missed ball — curves wide
-  ctx.strokeStyle = `rgba(200,200,255,${0.55 * age})`;
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(cx - 80, cy + 50);
-  ctx.bezierCurveTo(cx - 20, cy - 80, cx + 60, cy - 30, cx + 110, cy + 20);
-  ctx.stroke();
+    const sp0 = w2s(path.from.x, path.from.y);
+    const scp = w2s(path.cp.x,   path.cp.y);
+    const sp1 = w2s(path.to.x,   path.to.y);
 
-  // Ball dot along path
-  const bx = cx - 80 + (cx + 110 - (cx - 80)) * age;
-  const by = cy + 50 + ((cy + 20) - (cy + 50)) * age - 80 * Math.sin(Math.PI * age);
-  ctx.fillStyle = `rgba(255,255,255,${0.9 * age})`;
-  ctx.beginPath();
-  ctx.arc(bx, by, 5 * (1 - age * 0.4), 0, Math.PI * 2);
-  ctx.fill();
-
-  // "WIDE" drift rings at end
-  if (age > 0.7) {
-    const r = (age - 0.7) / 0.3;
-    ctx.strokeStyle = `rgba(200,200,255,${0.3 * r})`;
-    ctx.lineWidth = 0.5;
+    // Glow pass (thick, low alpha)
+    ctx.strokeStyle = `rgba(${r},${g},${b},${baseAlpha * 0.4})`;
+    ctx.lineWidth   = 4 * zoom;
     ctx.beginPath();
-    ctx.arc(cx + 110, cy + 20, 20 * r, 0, Math.PI * 2);
+    ctx.moveTo(sp0.x, sp0.y);
+    ctx.quadraticCurveTo(scp.x, scp.y, sp1.x, sp1.y);
     ctx.stroke();
-  }
-}
 
-function drawFracture(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2;
-  const age = Math.min(t / 900, 1);
-
-  // Three coloured streams radiating from centre
-  const streams = [
-    { angle: -Math.PI / 6,     color: "rgba(168,196,224," },
-    { angle: Math.PI / 2,      color: "rgba(126,207,160," },
-    { angle: Math.PI + Math.PI / 6, color: "rgba(232,168,124," },
-  ];
-  streams.forEach(({ angle, color }) => {
-    const len = 120 * age;
-    const ex = cx + Math.cos(angle) * len;
-    const ey = cy + Math.sin(angle) * len;
-    const g = ctx.createLinearGradient(cx, cy, ex, ey);
-    g.addColorStop(0, color + "0.7)");
-    g.addColorStop(1, color + "0)");
-    ctx.strokeStyle = g;
-    ctx.lineWidth = 1.5;
+    // Core line
+    ctx.strokeStyle = `rgba(${r},${g},${b},${baseAlpha})`;
+    ctx.lineWidth   = 0.8 * zoom;
     ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(ex, ey);
+    ctx.moveTo(sp0.x, sp0.y);
+    ctx.quadraticCurveTo(scp.x, scp.y, sp1.x, sp1.y);
     ctx.stroke();
   });
 
-  // Origin pulse
-  const p = 0.9 + 0.1 * Math.sin(t * 0.003);
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, 4 * p, 0, Math.PI * 2);
-  ctx.fill();
-}
+  // ── Draw particles ──
+  particles.forEach(p => {
+    // Advance
+    p.t = (p.t + p.speed) % 1;
 
-function drawReferee(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2;
+    const path   = PATHS[p.pathIdx];
+    const [r, g, b] = PATH_COLORS[path.color];
+    const wpos   = bezierPoint(p.t, path.from, path.cp, path.to);
+    const spos   = w2s(wpos.x, wpos.y);
 
-  // Horizontal analysis lines
-  for (let i = 0; i < 5; i++) {
-    const y = cy - 60 + i * 30;
-    const alpha = 0.55 - i * 0.08;
-    ctx.strokeStyle = `rgba(168,196,224,${alpha})`;
-    ctx.lineWidth = 0.5;
+    // Only draw if on screen
+    if (spos.x < -20 || spos.x > sw + 20 || spos.y < -20 || spos.y > sh + 20) return;
+
+    const alpha = p.alpha * (step >= 2 ? 0.85 : 0.35);
+    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
     ctx.beginPath();
-    ctx.moveTo(cx - 100, y);
-    ctx.lineTo(cx + 100, y);
-    ctx.stroke();
-  }
-
-  // Radial glow
-  const pulse = 0.85 + 0.15 * Math.sin(t * 0.002);
-  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 70 * pulse);
-  grad.addColorStop(0, "rgba(168,196,224,0.18)");
-  grad.addColorStop(1, "transparent");
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 70 * pulse, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Offside dashed verticals
-  [-38, 38].forEach(dx => {
-    ctx.strokeStyle = "rgba(168,196,224,0.35)";
-    ctx.lineWidth = 0.5;
-    ctx.setLineDash([3, 4]);
-    ctx.beginPath();
-    ctx.moveTo(cx + dx, cy - 60);
-    ctx.lineTo(cx + dx, cy + 60);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  });
-}
-
-function drawFan(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2;
-  const pulse = 0.9 + 0.1 * Math.sin(t * 0.0018);
-
-  // Concentric circles — pitch centre circle
-  const radii = [20, 45, 68, 90];
-  radii.forEach((r, i) => {
-    ctx.strokeStyle = `rgba(126,207,160,${0.55 - i * 0.1})`;
-    ctx.lineWidth = 0.6 - i * 0.1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * pulse, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.arc(spos.x, spos.y, 2 * zoom, 0, Math.PI * 2);
+    ctx.fill();
   });
 
-  // Centre spot
-  ctx.fillStyle = "rgba(126,207,160,0.7)";
-  ctx.beginPath();
-  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawSupporter(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2;
-
-  // Pulsing amber energy rings — chaotic frequency
-  [0.0035, 0.0028, 0.0042].forEach((freq, i) => {
-    const r = (38 + i * 32) * (0.85 + 0.15 * Math.sin(t * freq + i));
-    ctx.strokeStyle = `rgba(232,168,124,${0.48 - i * 0.12})`;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-  });
-
-  // Centre burst
-  const p = 0.7 + 0.3 * Math.abs(Math.sin(t * 0.005));
-  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 50 * p);
-  g.addColorStop(0, "rgba(232,168,124,0.28)");
-  g.addColorStop(1, "transparent");
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 50 * p, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawSplit(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2;
-  const age = Math.min(t / 800, 1);
-
-  // Germany side — red diagonal streaks (left)
-  const germanyLines = [[-80, 90, -20, 10], [-55, 90, 10, 10], [-30, 90, 40, 15]];
-  germanyLines.forEach(([x1, y1, x2, y2]) => {
-    const g = ctx.createLinearGradient(cx + x1, cy + y1, cx + x2, cy + y2);
-    g.addColorStop(0, `rgba(210,40,40,${0.55 * age})`);
-    g.addColorStop(1, `rgba(210,40,40,0)`);
-    ctx.strokeStyle = g;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(cx + x1, cy + y1);
-    ctx.lineTo(cx + x2, cy + y2);
-    ctx.stroke();
-  });
-
-  // Brazil side — gold-green streaks (right)
-  const brazilLines = [[80, 90, 20, 10], [55, 90, -10, 10], [30, 90, -40, 15]];
-  brazilLines.forEach(([x1, y1, x2, y2]) => {
-    const g = ctx.createLinearGradient(cx + x1, cy + y1, cx + x2, cy + y2);
-    g.addColorStop(0, `rgba(40,180,80,${0.55 * age})`);
-    g.addColorStop(1, `rgba(40,180,80,0)`);
-    ctx.strokeStyle = g;
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(cx + x1, cy + y1);
-    ctx.lineTo(cx + x2, cy + y2);
-    ctx.stroke();
-  });
-
-  // Vertical dividing line
-  ctx.strokeStyle = `rgba(255,255,255,${0.2 * age})`;
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 70);
-  ctx.lineTo(cx, cy + 70);
-  ctx.stroke();
-}
-
-function drawReveal(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
-  ctx.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2;
-  const age = Math.min(t / 1000, 1);
-
-  // Full branching tree: root → 3 coloured branches
-  const branches = [
-    { angle: -Math.PI / 3,     color: "rgba(168,196,224," },
-    { angle: -Math.PI / 2,     color: "rgba(255,255,255,"  },
-    { angle: -Math.PI * 2 / 3, color: "rgba(232,168,124," },
+  // ── Draw nodes ──
+  const nodeList = [
+    { key: "root",      n: N.root },
+    { key: "miss",      n: N.miss },
+    { key: "fracture",  n: N.fracture },
+    { key: "referee",   n: N.referee },
+    { key: "fan",       n: N.fan },
+    { key: "supporter", n: N.supporter },
   ];
 
-  // Root stem
-  const rootLen = 50 * age;
-  ctx.strokeStyle = `rgba(255,255,255,${0.4 * age})`;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy + 70);
-  ctx.lineTo(cx, cy + 70 - rootLen);
-  ctx.stroke();
+  nodeList.forEach(({ key, n: wn }) => {
+    const [r, g, b] = NODE_COLORS[key];
+    const sp = w2s(wn.x, wn.y);
 
-  if (age > 0.4) {
-    const branchAge = (age - 0.4) / 0.6;
-    branches.forEach(({ angle, color }) => {
-      const len = 80 * branchAge;
-      const ex = cx + Math.cos(angle) * len;
-      const ey = cy + 70 - rootLen + Math.sin(angle) * len;
-      const g = ctx.createLinearGradient(cx, cy + 70 - rootLen, ex, ey);
-      g.addColorStop(0, color + "0.6)");
-      g.addColorStop(1, color + "0.2)");
-      ctx.strokeStyle = g;
-      ctx.lineWidth = 0.8;
+    // Off-screen cull
+    if (sp.x < -60 || sp.x > sw + 60 || sp.y < -60 || sp.y > sh + 60) return;
+
+    // Is this the active node?
+    const activeNode = STEPS[step].node;
+    const isActive   = activeNode === key;
+    const pulse = isActive ? (0.8 + 0.2 * Math.sin(t * 0.003)) : 1;
+
+    // Aura
+    if (isActive) {
+      const aura = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, 44 * zoom * pulse);
+      aura.addColorStop(0, `rgba(${r},${g},${b},0.22)`);
+      aura.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = aura;
       ctx.beginPath();
-      ctx.moveTo(cx, cy + 70 - rootLen);
-      ctx.quadraticCurveTo(cx + Math.cos(angle) * len * 0.5, cy + 70 - rootLen + Math.sin(angle) * len * 0.5, ex, ey);
-      ctx.stroke();
+      ctx.arc(sp.x, sp.y, 44 * zoom * pulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-      // Terminal glow
-      if (branchAge > 0.8) {
-        const glow = (branchAge - 0.8) / 0.2;
-        ctx.fillStyle = color + `${0.55 * glow})`;
-        ctx.beginPath();
-        ctx.arc(ex, ey, 4 * glow, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
+    // Ring
+    ctx.strokeStyle = `rgba(${r},${g},${b},${isActive ? 0.7 : 0.28})`;
+    ctx.lineWidth   = (isActive ? 1.2 : 0.6) * zoom;
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, (isActive ? 14 : 10) * zoom * (isActive ? pulse : 1), 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Core dot
+    ctx.fillStyle = `rgba(${r},${g},${b},${isActive ? 0.9 : 0.45})`;
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, (isActive ? 4.5 : 3) * zoom, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // ── Ambient floating particles (background depth) ──
+  const seed = Math.floor(t / 60) * 0;  // stable
+  for (let i = 0; i < 18; i++) {
+    const drift = Math.sin(t * 0.0008 + i * 1.7) * 2;
+    const wx = (((i * 173.3) % 900) - 450) + drift;
+    const wy = (((i * 97.1)  % 1400) - 600);
+    const sp = w2s(wx, wy);
+    if (sp.x < 0 || sp.x > sw || sp.y < 0 || sp.y > sh) continue;
+    const a = 0.04 + 0.03 * Math.sin(t * 0.001 + i);
+    ctx.fillStyle = `rgba(200,220,255,${a})`;
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, 1.2, 0, Math.PI * 2);
+    ctx.fill();
   }
+
+  void seed;
 }
-
-const DRAW_FNS: Record<string, (ctx: CanvasRenderingContext2D, w: number, h: number, t: number) => void> = {
-  anticipation: drawAnticipation,
-  miss        : drawMiss,
-  fracture    : drawFracture,
-  referee     : drawReferee,
-  fan         : drawFan,
-  supporter   : drawSupporter,
-  split       : drawSplit,
-  reveal      : drawReveal,
-};
-
-// ── Text animation variants ───────────────────────────────────────────────────
-
-const textVariants = {
-  enter : (d: number) => ({
-    y      : d > 0 ? 48 : -48,
-    opacity: 0,
-    filter : "blur(6px)",
-    scale  : d > 0 ? 0.96 : 1.04,
-  }),
-  center: { y: 0, opacity: 1, filter: "blur(0px)", scale: 1 },
-  exit  : (d: number) => ({
-    y      : d > 0 ? -48 : 48,
-    opacity: 0,
-    filter : "blur(6px)",
-    scale  : d > 0 ? 1.04 : 0.96,
-  }),
-};
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function StorySection({ visible, onComplete }: Props) {
-  const [sceneIdx,   setSceneIdx]   = useState(0);
-  const [direction,  setDirection]  = useState(1);
+  const [step, setStep] = useState(0);
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const rafRef      = useRef<number>(0);
-  const mountTimeRef= useRef<number>(0);
+  const startTimeRef= useRef<number>(0);
   const accumRef    = useRef<number>(0);
-  const sceneIdxRef = useRef<number>(0);
+  const stepRef     = useRef<number>(0);
   const advancingRef= useRef<boolean>(false);
+  const particlesRef= useRef<Particle[]>(initParticles());
   const onCompleteRef = useRef(onComplete);
+
+  // Lerped camera state
+  const camRef = useRef({ x: CAMERA_STEPS[0].x, y: CAMERA_STEPS[0].y, zoom: CAMERA_STEPS[0].zoom });
+
   useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+  useEffect(() => { stepRef.current = step; }, [step]);
 
-  // Sync ref with state for stable event handlers
-  useEffect(() => { sceneIdxRef.current = sceneIdx; }, [sceneIdx]);
+  // ── Reset on show ──
+  useEffect(() => {
+    if (visible) {
+      setStep(0);
+      stepRef.current = 0;
+      accumRef.current = 0;
+      const target = CAMERA_STEPS[0];
+      camRef.current = { x: target.x, y: target.y, zoom: target.zoom };
+    }
+  }, [visible]);
 
-  // ── Canvas RAF loop ──
+  // ── RAF loop ──
   useEffect(() => {
     if (!visible) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     const resize = () => {
       canvas.width  = canvas.offsetWidth  * devicePixelRatio;
@@ -439,21 +346,27 @@ export default function StorySection({ visible, onComplete }: Props) {
     };
     resize();
     window.addEventListener("resize", resize);
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    mountTimeRef.current = performance.now();
+    startTimeRef.current = performance.now();
 
     const loop = (now: number) => {
-      const elapsed = now - mountTimeRef.current;
-      const scene   = SCENES[sceneIdxRef.current];
-      const fn      = DRAW_FNS[scene.canvasKey];
+      const elapsed = now - startTimeRef.current;
       const dpr     = devicePixelRatio;
+      const sw      = canvas.offsetWidth;
+      const sh      = canvas.offsetHeight;
+      const target  = CAMERA_STEPS[stepRef.current];
+      const LERP    = 0.062; // controls travel smoothness — lower = slower camera
+
+      // Lerp camera toward target
+      const cam = camRef.current;
+      cam.x    += (target.x    - cam.x)    * LERP;
+      cam.y    += (target.y    - cam.y)    * LERP;
+      cam.zoom += (target.zoom - cam.zoom) * LERP;
+
       ctx.save();
       ctx.scale(dpr, dpr);
-      fn(ctx, canvas.offsetWidth, canvas.offsetHeight, elapsed);
+      drawWorld(ctx, sw, sh, cam.x, cam.y, cam.zoom, elapsed, stepRef.current, particlesRef.current);
       ctx.restore();
+
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
@@ -464,28 +377,24 @@ export default function StorySection({ visible, onComplete }: Props) {
     };
   }, [visible]);
 
-  // Reset canvas mount time when scene changes so animations restart
-  const resetMount = () => { mountTimeRef.current = performance.now(); };
-
-  // ── Advance/retreat logic ──
+  // ── Advance ──
   const advance = useCallback((delta: number) => {
     if (advancingRef.current) return;
     advancingRef.current = true;
-    setTimeout(() => { advancingRef.current = false; }, 420);
+    setTimeout(() => { advancingRef.current = false; }, 380);
 
-    const next = sceneIdxRef.current + delta;
+    const cur  = stepRef.current;
+    const next = cur + delta;
     if (next < 0) return;
-    if (next >= SCENES.length) {
-      // All scenes consumed → trigger portals
+    if (next >= STEPS.length) {
       onCompleteRef.current();
       return;
     }
-    setDirection(delta);
-    setSceneIdx(next);
-    resetMount();
+    setStep(next);
+    stepRef.current = next;
   }, []);
 
-  // ── Wheel accumulator ──
+  // ── Wheel ──
   useEffect(() => {
     if (!visible) return;
     const onWheel = (e: WheelEvent) => {
@@ -504,256 +413,226 @@ export default function StorySection({ visible, onComplete }: Props) {
   useEffect(() => {
     if (!visible) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown" || e.key === "ArrowRight" || e.key === " ") advance(1);
-      if (e.key === "ArrowUp"   || e.key === "ArrowLeft")                    advance(-1);
+      if (["ArrowDown", "ArrowRight", " "].includes(e.key)) { e.preventDefault(); advance(1);  }
+      if (["ArrowUp",   "ArrowLeft"       ].includes(e.key)) { e.preventDefault(); advance(-1); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [visible, advance]);
 
   // ── Touch ──
-  const touchStartY = useRef<number>(0);
+  const touchY = useRef(0);
   useEffect(() => {
     if (!visible) return;
-    const onStart = (e: TouchEvent) => { touchStartY.current = e.touches[0].clientY; };
+    const onStart = (e: TouchEvent) => { touchY.current = e.touches[0].clientY; };
     const onEnd   = (e: TouchEvent) => {
-      const dy = touchStartY.current - e.changedTouches[0].clientY;
+      const dy = touchY.current - e.changedTouches[0].clientY;
       if (Math.abs(dy) > 40) advance(dy > 0 ? 1 : -1);
     };
     window.addEventListener("touchstart", onStart, { passive: true });
     window.addEventListener("touchend",   onEnd,   { passive: true });
-    return () => {
-      window.removeEventListener("touchstart", onStart);
-      window.removeEventListener("touchend",   onEnd);
-    };
+    return () => { window.removeEventListener("touchstart", onStart); window.removeEventListener("touchend", onEnd); };
   }, [visible, advance]);
 
-  const scene    = SCENES[sceneIdx];
-  const isLast   = sceneIdx === SCENES.length - 1;
-  const progress = (sceneIdx + 1) / SCENES.length;
+  const stepData    = STEPS[step];
+  const isLastStep  = step === STEPS.length - 1;
+  const progress    = (step + 1) / STEPS.length;
+
+  // Accent colour as string for text
+  const accent = stepData.accent;
 
   return (
     <AnimatePresence>
       {visible && (
         <motion.div
-          className="absolute inset-0 flex overflow-hidden"
+          className="absolute inset-0 overflow-hidden"
           style={{ zIndex: 55 }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
         >
-          {/* ── Background tint — transitions per scene ── */}
-          <motion.div
-            className="absolute inset-0 pointer-events-none"
-            animate={{ background: scene.bg }}
-            transition={{ duration: 0.75, ease: "easeInOut" }}
+          {/* ── Full-screen canvas — the world ── */}
+          <canvas
+            ref={canvasRef}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
           />
 
-          {/* ── LEFT PANEL: narrative text ── */}
+          {/* ── Subtle background gradient — shifts per POV ── */}
+          <motion.div
+            className="absolute inset-0 pointer-events-none"
+            animate={{
+              background:
+                step === 3 ? "radial-gradient(ellipse at 20% 60%, rgba(0,20,60,0.65) 0%, transparent 70%)"
+              : step === 4 ? "radial-gradient(ellipse at 50% 60%, rgba(0,40,20,0.60) 0%, transparent 70%)"
+              : step === 5 ? "radial-gradient(ellipse at 80% 60%, rgba(60,20,0,0.65) 0%, transparent 70%)"
+              : "radial-gradient(ellipse at 50% 50%, rgba(0,4,18,0.50) 0%, transparent 70%)",
+            }}
+            transition={{ duration: 1.2, ease: "easeInOut" }}
+          />
+
+          {/* ── Content overlay — fades to new content, world stays ── */}
           <div
-            className="relative flex flex-col justify-center"
+            className="absolute inset-0 flex flex-col justify-center pointer-events-none"
             style={{
-              width  : "50%",
-              padding: "0 clamp(32px, 6vw, 80px)",
-              zIndex : 2,
+              // Align text bottom-left except on branch nodes (centred toward that side)
+              paddingLeft : step === 3 ? "6vw" : step === 5 ? "auto" : "8vw",
+              paddingRight: step === 5 ? "6vw" : step === 3 ? "auto" : "auto",
+              paddingBottom: "12vh",
+              alignItems  : step === 3 ? "flex-start" : step === 5 ? "flex-end" : step === 4 ? "center" : "flex-start",
             }}
           >
-            <AnimatePresence mode="wait" custom={direction}>
+            <AnimatePresence mode="wait">
               <motion.div
-                key={sceneIdx}
-                custom={direction}
-                variants={textVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                key={step}
+                initial={{ opacity: 0, y: 22, filter: "blur(8px)" }}
+                animate={{ opacity: 1, y: 0,  filter: "blur(0px)" }}
+                exit   ={{ opacity: 0, y: -16, filter: "blur(6px)" }}
+                transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  maxWidth   : "480px",
+                  textAlign  : step === 4 ? "center" : step === 5 ? "right" : "left",
+                  pointerEvents: isLastStep ? "auto" : "none",
+                }}
               >
                 {/* Kicker */}
-                <motion.p
-                  style={{
-                    fontFamily   : "var(--font-inter), sans-serif",
-                    fontWeight   : 300,
-                    fontSize     : "clamp(0.5rem, 0.75vw, 0.7rem)",
-                    letterSpacing: "0.38em",
-                    textTransform: "uppercase",
-                    color        : scene.accent,
-                    marginBottom : "1.2rem",
-                    lineHeight   : 1,
-                  }}
-                >
-                  {scene.kicker}
-                </motion.p>
+                <p style={{
+                  fontFamily   : "var(--font-inter), sans-serif",
+                  fontWeight   : 300,
+                  fontSize     : "clamp(0.48rem, 0.7vw, 0.68rem)",
+                  letterSpacing: "0.40em",
+                  textTransform: "uppercase",
+                  color        : accent,
+                  marginBottom : "1rem",
+                  lineHeight   : 1,
+                }}>
+                  {stepData.kicker}
+                </p>
 
                 {/* Headline */}
-                <h2
-                  style={{
-                    fontFamily   : "var(--font-inter), sans-serif",
-                    fontWeight   : 300,
-                    fontSize     : "clamp(1.4rem, 3.2vw, 2.8rem)",
-                    letterSpacing: "0.02em",
-                    color        : "rgba(255,255,255,0.95)",
-                    lineHeight   : 1.15,
-                    margin       : "0 0 1.4rem 0",
-                  }}
-                >
-                  {scene.headline}
+                <h2 style={{
+                  fontFamily   : "var(--font-inter), sans-serif",
+                  fontWeight   : 300,
+                  fontSize     : "clamp(1.2rem, 2.8vw, 2.4rem)",
+                  letterSpacing: "0.01em",
+                  color        : "rgba(255,255,255,0.94)",
+                  lineHeight   : 1.18,
+                  margin       : "0 0 1.1rem 0",
+                }}>
+                  {stepData.headline}
                 </h2>
 
                 {/* Body */}
-                {scene.body && (
-                  <p
-                    style={{
-                      fontFamily   : "var(--font-inter), sans-serif",
-                      fontWeight   : 300,
-                      fontSize     : "clamp(0.75rem, 1.1vw, 0.95rem)",
-                      letterSpacing: "0.04em",
-                      color        : "rgba(255,255,255,0.52)",
-                      lineHeight   : 1.7,
-                      maxWidth     : "400px",
-                    }}
-                  >
-                    {scene.body}
+                {stepData.body && (
+                  <p style={{
+                    fontFamily   : "var(--font-inter), sans-serif",
+                    fontWeight   : 300,
+                    fontSize     : "clamp(0.7rem, 1vw, 0.88rem)",
+                    letterSpacing: "0.04em",
+                    color        : "rgba(255,255,255,0.46)",
+                    lineHeight   : 1.7,
+                    maxWidth     : "380px",
+                    margin       : step === 4 ? "0 auto" : step === 5 ? "0 0 0 auto" : undefined,
+                  }}>
+                    {stepData.body}
                   </p>
                 )}
 
-                {/* CTA on last scene */}
-                {isLast && (
+                {/* Final CTA */}
+                {isLastStep && (
                   <motion.button
                     style={{
-                      marginTop    : "2.2rem",
-                      padding      : "0.6rem 2rem",
-                      border       : "1px solid rgba(255,255,255,0.25)",
+                      marginTop    : "2rem",
+                      padding      : "0.55rem 2.2rem",
+                      border       : "1px solid rgba(255,255,255,0.22)",
                       background   : "transparent",
-                      color        : "rgba(255,255,255,0.8)",
+                      color        : "rgba(255,255,255,0.75)",
                       fontFamily   : "var(--font-inter), sans-serif",
                       fontWeight   : 300,
-                      fontSize     : "0.65rem",
-                      letterSpacing: "0.35em",
+                      fontSize     : "0.6rem",
+                      letterSpacing: "0.38em",
                       textTransform: "uppercase",
                       cursor       : "none",
+                      display      : "block",
+                      margin       : "2rem auto 0",
                     }}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6, duration: 0.7 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0  }}
+                    transition={{ delay: 0.7, duration: 0.7 }}
                     onClick={() => onCompleteRef.current()}
-                    whileHover={{ borderColor: "rgba(255,255,255,0.55)", color: "rgba(255,255,255,1)" }}
+                    whileHover={{ borderColor: "rgba(255,255,255,0.5)", color: "rgba(255,255,255,1)" }}
                   >
                     Choose your reality
                   </motion.button>
                 )}
               </motion.div>
             </AnimatePresence>
+          </div>
 
-            {/* Scroll hint (non-last scenes) */}
-            {!isLast && (
+          {/* ── Scroll hint ── */}
+          {!isLastStep && (
+            <motion.div
+              className="absolute pointer-events-none flex flex-col items-center gap-2"
+              style={{ bottom: "5vh", left: "50%", transform: "translateX(-50%)" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.0 }}
+            >
               <motion.div
                 style={{
-                  position     : "absolute",
-                  bottom       : "7vh",
-                  left         : "clamp(32px, 6vw, 80px)",
-                  display      : "flex",
-                  alignItems   : "center",
-                  gap          : "10px",
+                  width     : "1px",
+                  height    : "28px",
+                  background: "linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)",
                 }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-              >
-                <motion.div
-                  style={{
-                    width     : "1px",
-                    height    : "24px",
-                    background: "linear-gradient(to bottom, rgba(255,255,255,0.4), transparent)",
-                  }}
-                  animate={{ scaleY: [1, 1.4, 1], opacity: [0.4, 0.8, 0.4] }}
-                  transition={{ duration: 1.8, repeat: Infinity }}
-                />
-                <span
-                  style={{
-                    fontFamily   : "var(--font-inter), sans-serif",
-                    fontWeight   : 300,
-                    fontSize     : "0.48rem",
-                    letterSpacing: "0.28em",
-                    textTransform: "uppercase",
-                    color        : "rgba(255,255,255,0.28)",
-                  }}
-                >
-                  Scroll to continue
-                </span>
-              </motion.div>
-            )}
-          </div>
+                animate={{ scaleY: [1, 1.5, 1], opacity: [0.35, 0.7, 0.35] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+              <span style={{
+                fontFamily   : "var(--font-inter), sans-serif",
+                fontWeight   : 300,
+                fontSize     : "0.46rem",
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                color        : "rgba(255,255,255,0.22)",
+              }}>
+                Scroll to travel
+              </span>
+            </motion.div>
+          )}
 
-          {/* ── VERTICAL DIVIDER ── */}
+          {/* ── Step counter (subtle, top-right) ── */}
           <div
-            style={{
-              width     : "1px",
-              background: "rgba(255,255,255,0.06)",
-              flexShrink: 0,
-              zIndex    : 2,
-            }}
-          />
-
-          {/* ── RIGHT PANEL: living canvas ── */}
-          <div
-            className="relative flex items-center justify-center"
-            style={{ flex: 1, zIndex: 2 }}
+            className="absolute pointer-events-none"
+            style={{ top: "3.5vh", right: "3vw", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}
           >
-            <canvas
-              ref={canvasRef}
-              style={{
-                position: "absolute",
-                inset   : 0,
-                width   : "100%",
-                height  : "100%",
-              }}
-            />
-          </div>
-
-          {/* ── PROGRESS DOTS ── */}
-          <div
-            style={{
-              position      : "absolute",
-              right         : "clamp(20px, 3vw, 36px)",
-              top           : "50%",
-              transform     : "translateY(-50%)",
-              display       : "flex",
-              flexDirection : "column",
-              gap           : "10px",
-              zIndex        : 10,
-            }}
-          >
-            {SCENES.map((_, i) => (
+            {STEPS.map((_, i) => (
               <motion.div
                 key={i}
                 animate={{
-                  opacity        : i === sceneIdx ? 1 : 0.25,
-                  scale          : i === sceneIdx ? 1.3 : 1,
-                  backgroundColor: i === sceneIdx ? scene.accent : "rgba(255,255,255,0.4)",
+                  opacity        : i === step ? 0.9 : i < step ? 0.35 : 0.15,
+                  scale          : i === step ? 1.4 : 1,
+                  backgroundColor: i === step ? accent : "rgba(255,255,255,0.3)",
                 }}
-                transition={{ duration: 0.35 }}
-                style={{ width: "4px", height: "4px", borderRadius: "50%" }}
+                transition={{ duration: 0.4 }}
+                style={{ width: "3px", height: "3px", borderRadius: "50%" }}
               />
             ))}
           </div>
 
-          {/* ── BOTTOM PROGRESS BAR ── */}
-          <div
-            style={{
-              position  : "absolute",
-              bottom    : 0,
-              left      : 0,
-              right     : 0,
-              height    : "1px",
-              background: "rgba(255,255,255,0.05)",
-              zIndex    : 10,
-            }}
-          >
+          {/* ── Progress bar ── */}
+          <div style={{
+            position  : "absolute",
+            bottom    : 0,
+            left      : 0,
+            right     : 0,
+            height    : "1px",
+            background: "rgba(255,255,255,0.05)",
+            zIndex    : 10,
+          }}>
             <motion.div
               style={{ height: "100%", background: "rgba(255,255,255,0.28)" }}
               animate={{ width: `${progress * 100}%` }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
             />
           </div>
         </motion.div>
