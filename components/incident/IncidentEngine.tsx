@@ -560,7 +560,11 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
   const sweepOuterTimer    = useRef<ReturnType<typeof setTimeout>>(undefined);
   const sweepInnerTimer    = useRef<ReturnType<typeof setTimeout>>(undefined);
   const verdictMsgSentRef  = useRef(false);
+  const ambienceCtxRef     = useRef<AudioContext | null>(null);
+  const ambienceGainRef    = useRef<GainNode | null>(null);
   const [edgeSweepActive,  setEdgeSweepActive]  = useState(false);
+  const [verdictSweepActive, setVerdictSweepActive] = useState(false);
+  const [verdictImpulse,   setVerdictImpulse]   = useState(false);
 
   // Intro sequence
   const [introPhase, setIntroPhase] = useState<"hold" | "reveal" | "active">("hold");
@@ -668,6 +672,67 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     } catch { /* audio blocked — silently skip */ }
   }, []);
 
+  // Referee whistle — short sine burst with LFO vibrato, natural whistle timbre
+  const playWhistle = useCallback(() => {
+    try {
+      const ctx  = new AudioContext();
+      const osc  = ctx.createOscillator();
+      const lfo  = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      const gain = ctx.createGain();
+      osc.type  = "sine";
+      osc.frequency.value = 2750;
+      lfo.frequency.value = 14;       // Hz wobble — authentic whistle flutter
+      lfoG.gain.value     = 35;       // Hz deviation
+      lfo.connect(lfoG);
+      lfoG.connect(osc.frequency);
+      gain.gain.setValueAtTime(0,    ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.16, ctx.currentTime + 0.018);
+      gain.gain.setValueAtTime(0.16, ctx.currentTime + 0.22);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.44);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      lfo.start(); osc.start();
+      lfo.stop(ctx.currentTime + 0.5);
+      osc.stop(ctx.currentTime + 0.5);
+      setTimeout(() => ctx.close(), 700);
+    } catch { /* audio blocked */ }
+  }, []);
+
+  // Stadium crowd ambience — shaped noise, very low, atmospheric
+  const startAmbience = useCallback(() => {
+    if (ambienceCtxRef.current) return;
+    try {
+      const ctx      = new AudioContext();
+      const rate     = ctx.sampleRate;
+      const loopSecs = 4;
+      const buf      = ctx.createBuffer(2, rate * loopSecs, rate);
+      for (let c = 0; c < 2; c++) {
+        const d = buf.getChannelData(c);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+      }
+      const src  = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop   = true;
+      // Band-pass to shape noise into distant crowd murmur (80-420 Hz)
+      const hp   = ctx.createBiquadFilter();
+      hp.type    = "highpass";  hp.frequency.value = 80;
+      const lp   = ctx.createBiquadFilter();
+      lp.type    = "lowpass";   lp.frequency.value = 420;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.028, ctx.currentTime + 4); // slow fade-in
+      src.connect(hp); hp.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
+      src.start();
+      ambienceCtxRef.current  = ctx;
+      ambienceGainRef.current = gain;
+    } catch { /* no audio */ }
+  }, []);
+
+  // Ambience cleanup on unmount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => { ambienceCtxRef.current?.close().catch(() => {}); }, []);
+
   const applyAction = useCallback((action: VarAction | null) => {
     if (!action) return;
     if (action.type === "goToStep" && typeof action.value === "number")
@@ -681,6 +746,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
   const sendDirect = useCallback(async (directMsg: string) => {
     const msg = directMsg.trim();
     if (!msg || isLoading) return;
+    startAmbience(); // first interaction unlocks AudioContext autoplay policy
     setInputValue("");
     setAssistantHighlights([]);
     setAssistantCard(null);
@@ -712,11 +778,12 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, incidentContext, step, stepData, applyAction, playRadioClick]);
+  }, [isLoading, incidentContext, step, stepData, applyAction, playRadioClick, startAmbience]);
 
   const sendMessage = useCallback(async () => {
     const msg = inputValue.trim();
     if (!msg || isLoading) return;
+    startAmbience();
     setInputValue("");
     setAssistantHighlights([]);
     setAssistantCard(null);
@@ -750,27 +817,53 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     } finally {
       setIsLoading(false);
     }
-  }, [inputValue, isLoading, incidentContext, step, stepData, applyAction]);
+  }, [inputValue, isLoading, incidentContext, step, stepData, applyAction, startAmbience]);
 
-  // Verdict auto-message — when entering step 4, assistant delivers final determination
+  // ── Verdict Ceremony ─────────────────────────────────────────────────────────
+  // Multi-step sequence: pause → "Review complete" → whistle + sweep + impulse → "Final determination"
   useEffect(() => {
     if (step === incident.steps.length - 1 && introPhase === "active" && !verdictMsgSentRef.current) {
       verdictMsgSentRef.current = true;
-      const t = setTimeout(() => {
+      const timers: ReturnType<typeof setTimeout>[] = [];
+
+      // T+1700ms: Part 1 — ambient transmission, "Review complete"
+      timers.push(setTimeout(() => {
         playRadioClick();
         clearTimeout(panelActiveTimer.current);
         setPanelActive(true);
-        panelActiveTimer.current = setTimeout(() => setPanelActive(false), 2200);
+        panelActiveTimer.current = setTimeout(() => setPanelActive(false), 2500);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          text: "Review complete. All evidence has been assessed.",
+          timestamp: Date.now(),
+        }]);
+      }, 1700));
+
+      // T+2900ms: Whistle + full-pitch sweep + camera micro-impulse
+      timers.push(setTimeout(() => {
+        playWhistle();
+        setVerdictSweepActive(true);
+        setVerdictImpulse(true);
+        timers.push(setTimeout(() => setVerdictImpulse(false), 200));
+      }, 2900));
+
+      // T+3900ms: Part 2 — final determination
+      timers.push(setTimeout(() => {
+        playRadioClick();
+        clearTimeout(panelActiveTimer.current);
+        setPanelActive(true);
+        panelActiveTimer.current = setTimeout(() => setPanelActive(false), 3500);
         setMessages(prev => [...prev, {
           role     : "assistant",
-          text     : "Final determination ready. Evidence review complete — Law 11 criteria satisfied. Havertz 3.0m beyond the defensive line at the moment of the pass. Reviewing officer's call confirmed.",
+          text     : "Final determination — OFFSIDE CONFIRMED. Havertz 3.0m beyond the second-last defender. Indirect free kick awarded to Brazil.",
           timestamp: Date.now(),
           stepRef  : incident.steps.length - 1,
         }]);
-      }, 1700); // fires after the 1.4s verdict lock expires + buffer
-      return () => clearTimeout(t);
+      }, 3900));
+
+      return () => timers.forEach(clearTimeout);
     }
-  }, [step, incident.steps.length, introPhase, playRadioClick]);
+  }, [step, incident.steps.length, introPhase, playRadioClick, playWhistle]);
 
   // Investigation commands — replaces generic quick prompts
   const investigationCommands = [
@@ -948,6 +1041,34 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             )}
           </AnimatePresence>
 
+          {/* Verdict blue sweep — full-pitch width, travels L→R on determination */}
+          <AnimatePresence>
+            {verdictSweepActive && (
+              <motion.div
+                key="verdict-sweep"
+                initial={{ x: "-115%" }}
+                animate={{ x: "120%" }}
+                exit={{}}
+                transition={{ duration: 2.2, ease: [0.18, 0, 0.55, 1] }}
+                onAnimationComplete={() => setVerdictSweepActive(false)}
+                style={{
+                  position: "absolute", top: 0, bottom: 0, left: 0, width: "70%",
+                  zIndex: 28, pointerEvents: "none",
+                  background: "linear-gradient(90deg, transparent 0%, rgba(80,140,255,0.05) 20%, rgba(110,170,255,0.09) 50%, rgba(80,140,255,0.05) 80%, transparent 100%)",
+                }}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Camera micro-impulse wrapper — 2px physical presence on verdict */}
+          <motion.div
+            animate={verdictImpulse ? { y: [0, -2, 1, 0], x: [0, 1.5, -0.5, 0] } : { y: 0, x: 0 }}
+            transition={verdictImpulse
+              ? { duration: 0.18, ease: "easeOut" }
+              : { duration: 0 }}
+            style={{ width: "100%", height: "100%", position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+
           {/* Breathing outer wrapper — subtle idle camera life */}
           <motion.div
             animate={{ scale: [1, 1.006, 1, 1.003, 1], y: ["0%", "-0.35%", "0%", "0.18%", "0%"] }}
@@ -997,6 +1118,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
               </SVGPitch>
             </motion.div>
           </motion.div>
+          </motion.div> {/* /camera micro-impulse wrapper */}
 
           {/* Verdict dramatic pause overlay */}
           <AnimatePresence>
@@ -1005,26 +1127,39 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                 key="verdict-pause"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.8 } }}
-                transition={{ duration: 0.3 }}
+                exit={{ opacity: 0, transition: { duration: 1.0, ease: "easeIn" } }}
+                transition={{ duration: 0.4 }}
                 style={{
                   position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none",
-                  background: "rgba(0,2,10,0.5)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "radial-gradient(ellipse at center, rgba(0,4,18,0.55) 0%, rgba(0,2,10,0.72) 100%)",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
                 }}
               >
+                {/* Top horizontal rule */}
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: [0, 1, 1, 0], scale: [0.92, 1, 1, 0.96] }}
-                  transition={{ duration: 1.4, times: [0, 0.25, 0.75, 1] }}
+                  initial={{ scaleX: 0, opacity: 0 }}
+                  animate={{ scaleX: 1, opacity: 0.35 }}
+                  transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                  style={{ width: 80, height: "1px", background: "rgba(220,80,80,0.6)", transformOrigin: "center" }}
+                />
+                <motion.div
+                  initial={{ opacity: 0, letterSpacing: "0.3em" }}
+                  animate={{ opacity: [0, 0.65, 0.65, 0], letterSpacing: ["0.3em", "0.52em", "0.52em", "0.58em"] }}
+                  transition={{ duration: 1.4, times: [0, 0.2, 0.75, 1] }}
                   style={{
-                    fontSize: "0.72rem", letterSpacing: "0.52em",
-                    color: "rgba(220,80,80,0.7)", textTransform: "uppercase",
-                    fontWeight: 300,
+                    fontSize: "0.72rem",
+                    color: "rgba(220,80,80,0.75)", textTransform: "uppercase",
+                    fontWeight: 300, textAlign: "center",
                   }}
                 >
                   VAR Decision
                 </motion.div>
+                <motion.div
+                  initial={{ scaleX: 0, opacity: 0 }}
+                  animate={{ scaleX: 1, opacity: 0.35 }}
+                  transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                  style={{ width: 80, height: "1px", background: "rgba(220,80,80,0.6)", transformOrigin: "center" }}
+                />
               </motion.div>
             )}
           </AnimatePresence>
