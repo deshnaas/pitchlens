@@ -552,8 +552,11 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
   const [assistantCard,       setAssistantCard]       = useState<string | null>(null);
   // Verdict dramatic lock — brief pause before verdict overlays appear
   const [verdictLocked,       setVerdictLocked]       = useState(false);
+  // Panel active — glow intensifies briefly when assistant transmits
+  const [panelActive,         setPanelActive]         = useState(false);
 
   const assistantCardTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const panelActiveTimer   = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Intro sequence
   const [introPhase, setIntroPhase] = useState<"hold" | "reveal" | "active">("hold");
@@ -656,6 +659,10 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
       }]);
       setAssistantCard(data.text);
       assistantCardTimer.current = setTimeout(() => setAssistantCard(null), 7000);
+      // Briefly intensify panel glow on transmission received
+      clearTimeout(panelActiveTimer.current);
+      setPanelActive(true);
+      panelActiveTimer.current = setTimeout(() => setPanelActive(false), 2200);
       applyAction(data.action);
     } catch {
       setMessages(prev => [...prev, { role: "assistant", text: "Analysis feed interrupted. Review the timeline manually.", timestamp: Date.now() }]);
@@ -1048,6 +1055,10 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
         background: "rgba(0,4,14,0.97)",
         borderLeft: `1px solid ${acc}0.07)`,
         display: "flex", flexDirection: "column",
+        boxShadow: panelActive
+          ? `inset 0 0 80px rgba(20,55,120,0.14), inset -1px 0 0 rgba(${palette.accent},0.12)`
+          : `inset 0 0 50px rgba(10,30,80,0.07)`,
+        transition: "box-shadow 0.7s ease",
       }}>
 
         {/* Evidence panel */}
@@ -1137,83 +1148,215 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
         </div>
 
         {/* VAR Assistant */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, position: "relative" }}>
 
-          {/* Assistant header */}
+          {/* Breathing edge light — left border, slow pulse */}
+          <motion.div
+            animate={{ opacity: [0.28, 0.62, 0.28] }}
+            transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+            style={{
+              position: "absolute", left: 0, top: "8%", bottom: "8%", width: "1px",
+              background: `linear-gradient(180deg, transparent 0%, ${acc}0.55) 35%, ${acc}0.55) 65%, transparent 100%)`,
+              pointerEvents: "none", zIndex: 1,
+            }}
+          />
+
+          {/* Panel glow overlay — briefly intensifies on transmission */}
+          <AnimatePresence>
+            {panelActive && (
+              <motion.div
+                key="panel-glow"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: 1.0, ease: "easeOut" } }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+                style={{
+                  position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
+                  background: `radial-gradient(ellipse at 50% 20%, rgba(${palette.accent},0.05) 0%, transparent 68%)`,
+                }}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* VAR Operations Console Header */}
           <div style={{
-            padding: "14px 22px 12px",
+            flexShrink: 0,
             borderBottom: `1px solid ${acc}0.09)`,
-            display: "flex", alignItems: "center", gap: "11px", flexShrink: 0,
+            position: "relative", overflow: "hidden",
           }}>
+            {/* Top edge illumination line */}
             <motion.div
-              animate={{ opacity: [1, 0.2, 1] }}
-              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-              style={{ width: 8, height: 8, borderRadius: "50%", background: `${acc}0.68)`, flexShrink: 0 }}
+              animate={{ opacity: [0.4, 0.85, 0.4] }}
+              transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
+              style={{
+                position: "absolute", top: 0, left: "15%", right: "15%", height: "1px",
+                background: `linear-gradient(90deg, transparent, ${acc}0.7), ${acc}0.7), transparent)`,
+              }}
             />
-            <div>
-              <div style={{ fontSize: "0.75rem", letterSpacing: "0.22em", color: `${acc}0.58)`, textTransform: "uppercase", fontWeight: 300 }}>
-                VAR Assistant
+
+            {/* System label row */}
+            <div style={{
+              padding: "13px 22px 0",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+            }}>
+              <div style={{ fontSize: "0.58rem", letterSpacing: "0.42em", color: `${acc}0.24)`, textTransform: "uppercase" }}>
+                VAR Operations
               </div>
-              <div style={{ fontSize: "0.65rem", color: `${acc}0.25)`, marginTop: "2px" }}>
-                Granite · ibm/granite-3-3-8b-instruct
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ fontSize: "0.58rem", letterSpacing: "0.18em", color: `${acc}0.18)`, textTransform: "uppercase" }}>
+                  Channel 01
+                </div>
+                <div style={{ width: 1, height: 10, background: `${acc}0.1)` }} />
+                <div style={{ fontSize: "0.58rem", letterSpacing: "0.14em", color: `${acc}0.16)`, textTransform: "uppercase" }}>
+                  Encrypted
+                </div>
               </div>
+            </div>
+
+            {/* LIVE indicator row */}
+            <div style={{ padding: "11px 22px 0", display: "flex", alignItems: "center", gap: "12px" }}>
+              {/* Pulsing ring indicator */}
+              <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
+                <motion.div
+                  animate={{ scale: [1, 2.0, 1], opacity: [0.55, 0, 0.55] }}
+                  transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                  style={{
+                    position: "absolute", inset: 0, borderRadius: "50%",
+                    border: `1px solid ${acc}0.55)`,
+                  }}
+                />
+                <motion.div
+                  animate={{ opacity: [0.72, 1, 0.72] }}
+                  transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                  style={{
+                    position: "absolute", inset: "2px", borderRadius: "50%",
+                    background: `${acc}0.82)`,
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: "0.75rem", letterSpacing: "0.22em", color: `${acc}0.72)`, textTransform: "uppercase", fontWeight: 300 }}>
+                VAR Official Connected
+              </div>
+            </div>
+
+            {/* Divider with signal markers */}
+            <div style={{ padding: "12px 22px 13px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ flex: 1, height: "1px", background: `${acc}0.07)` }} />
+              {/* Signal strength bars */}
+              <div style={{ display: "flex", gap: "2px", alignItems: "flex-end" }}>
+                {[3, 5, 7, 9, 7].map((h, i) => (
+                  <motion.div key={i}
+                    animate={{ opacity: [0.3, i < 4 ? 0.7 : 0.25, 0.3] }}
+                    transition={{ duration: 2.1, repeat: Infinity, ease: "easeInOut", delay: i * 0.08 }}
+                    style={{ width: 2, height: h, background: `${acc}0.55)`, borderRadius: "1px" }}
+                  />
+                ))}
+              </div>
+              <div style={{ flex: 1, height: "1px", background: `${acc}0.07)` }} />
             </div>
           </div>
 
           {/* Messages */}
           <div style={{ flex: 1, overflowY: "auto", padding: "2px 0", display: "flex", flexDirection: "column", scrollbarWidth: "none" }}>
-            {messages.map((msg, i) => (
+            {messages.map((msg, i) => {
+              const isLatestAssistant = msg.role === "assistant" && i === messages.length - 1;
+              return (
               <motion.div key={i}
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35 }}
+                initial={{ opacity: 0, y: msg.role === "assistant" ? 10 : 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: msg.role === "assistant" ? 0.55 : 0.3, ease: [0.16, 1, 0.3, 1] }}
                 style={{
                   padding: msg.role === "assistant" ? "16px 22px" : "12px 22px",
                   borderBottom: `1px solid ${acc}0.04)`,
                   background: msg.role === "user" ? `${acc}0.028)` : "transparent",
+                  position: "relative", overflow: "hidden",
                 }}
               >
+                {/* Transmission scan line — only on newest assistant message while panel is active */}
+                {isLatestAssistant && panelActive && (
+                  <motion.div
+                    initial={{ scaleX: 0, opacity: 0.55 }}
+                    animate={{ scaleX: 1, opacity: 0 }}
+                    transition={{ duration: 1.0, ease: "easeOut", delay: 0.1 }}
+                    style={{
+                      position: "absolute", top: 0, left: 0, right: 0, height: "1px",
+                      background: `linear-gradient(90deg, transparent, ${acc}1), ${acc}0.6), transparent)`,
+                      transformOrigin: "left", pointerEvents: "none",
+                    }}
+                  />
+                )}
+
                 <div style={{
                   fontSize: "0.65rem", letterSpacing: "0.24em", textTransform: "uppercase",
-                  color: msg.role === "assistant" ? `${acc}0.5)` : "rgba(255,255,255,0.25)",
+                  color: msg.role === "assistant" ? `${acc}0.5)` : "rgba(255,255,255,0.22)",
                   marginBottom: "7px", fontWeight: 300,
-                  display: "flex", alignItems: "center", gap: "7px",
+                  display: "flex", alignItems: "center", gap: "8px",
                 }}>
-                  <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: msg.role === "assistant" ? `${acc}0.6)` : "rgba(255,255,255,0.3)", flexShrink: 0 }} />
-                  {msg.role === "assistant" ? "VAR OFFICIAL" : "REVIEWING OFFICER"}
+                  {/* Role indicator dot */}
+                  {msg.role === "assistant" ? (
+                    <motion.span
+                      animate={isLatestAssistant && panelActive
+                        ? { opacity: [1, 0.3, 1], scale: [1, 1.4, 1] }
+                        : { opacity: 1 }}
+                      transition={{ duration: 0.9, repeat: isLatestAssistant && panelActive ? 2 : 0 }}
+                      style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: `${acc}0.65)`, flexShrink: 0 }}
+                    />
+                  ) : (
+                    <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: "rgba(255,255,255,0.22)", flexShrink: 0 }} />
+                  )}
+                  {msg.role === "assistant" ? "VAR Official" : "Reviewing Officer"}
                 </div>
                 <p style={{
                   fontSize: msg.role === "assistant" ? "0.88rem" : "0.82rem",
-                  color: msg.role === "assistant" ? `${acc}0.85)` : "rgba(255,255,255,0.42)",
-                  lineHeight: 1.75, fontWeight: 300, margin: 0,
+                  color: msg.role === "assistant" ? `${acc}0.85)` : "rgba(255,255,255,0.38)",
+                  lineHeight: 1.78, fontWeight: 300, margin: 0,
                 }}>
                   {msg.text}
                 </p>
                 {msg.stepRef !== undefined && (
-                  <div style={{
-                    marginTop: "9px", display: "inline-flex", alignItems: "center", gap: "6px",
-                    fontSize: "0.65rem", letterSpacing: "0.16em",
-                    color: `${acc}0.44)`, border: `1px solid ${acc}0.18)`, padding: "4px 10px", textTransform: "uppercase",
-                  }}>
+                  <motion.div
+                    initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4, delay: 0.3 }}
+                    style={{
+                      marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "6px",
+                      fontSize: "0.62rem", letterSpacing: "0.18em",
+                      color: `${acc}0.42)`, border: `1px solid ${acc}0.16)`, padding: "4px 10px", textTransform: "uppercase",
+                    }}
+                  >
                     ↗ Navigated to Step {(msg.stepRef ?? 0) + 1}
-                  </div>
+                  </motion.div>
                 )}
               </motion.div>
-            ))}
+              );
+            })}
 
             {isLoading && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: "16px 22px" }}>
-                <div style={{ fontSize: "0.65rem", letterSpacing: "0.24em", textTransform: "uppercase", color: `${acc}0.5)`, marginBottom: "9px", display: "flex", alignItems: "center", gap: "7px" }}>
-                  <motion.span animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.1, repeat: Infinity }}
-                    style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: `${acc}0.6)` }}
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
+                style={{ padding: "16px 22px", position: "relative", overflow: "hidden" }}
+              >
+                {/* Scanning line during transmission */}
+                <motion.div
+                  animate={{ x: ["-100%", "200%"] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: "linear" }}
+                  style={{
+                    position: "absolute", top: 0, left: 0, width: "40%", height: "1px",
+                    background: `linear-gradient(90deg, transparent, ${acc}0.5), transparent)`,
+                    pointerEvents: "none",
+                  }}
+                />
+                <div style={{ fontSize: "0.65rem", letterSpacing: "0.24em", textTransform: "uppercase", color: `${acc}0.48)`, marginBottom: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <motion.span animate={{ opacity: [0.3, 1, 0.3], scale: [1, 1.3, 1] }} transition={{ duration: 0.9, repeat: Infinity }}
+                    style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: `${acc}0.65)`, flexShrink: 0 }}
                   />
-                  VAR OFFICIAL
+                  VAR Official
+                  <span style={{ fontSize: "0.55rem", color: `${acc}0.28)`, letterSpacing: "0.12em" }}>· Transmitting</span>
                 </div>
-                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                  {[0, 0.18, 0.36].map(d => (
+                <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+                  {[0, 0.15, 0.3].map(d => (
                     <motion.div key={d}
-                      animate={{ opacity: [0.2, 0.8, 0.2], y: [0, -3, 0] }}
-                      transition={{ duration: 1.0, repeat: Infinity, delay: d }}
-                      style={{ width: 5, height: 5, borderRadius: "50%", background: `${acc}0.48)` }}
+                      animate={{ opacity: [0.15, 0.75, 0.15], y: [0, -3.5, 0] }}
+                      transition={{ duration: 0.95, repeat: Infinity, delay: d, ease: "easeInOut" }}
+                      style={{ width: 5, height: 5, borderRadius: "50%", background: `${acc}0.5)` }}
                     />
                   ))}
                 </div>
@@ -1245,40 +1388,57 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             </div>
           )}
 
-          {/* Input */}
+          {/* Input — comms console */}
           <div style={{
-            padding: "12px 16px 14px", borderTop: `1px solid ${acc}0.09)`,
-            display: "flex", gap: "8px", alignItems: "center", flexShrink: 0,
+            padding: "0", borderTop: `1px solid ${acc}0.09)`,
+            flexShrink: 0, position: "relative",
           }}>
-            <input
-              ref={inputRef}
-              value={inputValue}
-              onChange={e => setInputValue(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") sendMessage(); }}
-              placeholder="Submit to VAR..."
-              style={{
-                flex: 1, background: `${acc}0.06)`,
-                border: `1px solid ${acc}0.13)`, color: `${acc}0.88)`,
-                padding: "10px 14px", fontSize: "0.875rem",
-                fontFamily: "inherit", outline: "none", cursor: "text",
-              }}
-              onFocus={e  => (e.target.style.borderColor = `${acc}0.34)`)}
-              onBlur={e   => (e.target.style.borderColor = `${acc}0.13)`)}
-            />
-            <button onClick={sendMessage} disabled={!inputValue.trim() || isLoading}
-              style={{
-                background: !inputValue.trim() || isLoading ? "none" : `${acc}0.1)`,
-                border: `1px solid ${acc}${!inputValue.trim() || isLoading ? "0.09)" : "0.28)"}`,
-                color: `${acc}${!inputValue.trim() || isLoading ? "0.18)" : "0.82)"}`,
-                padding: "10px 16px", fontSize: "0.82rem", letterSpacing: "0.08em",
-                cursor: "none", fontFamily: "inherit", transition: "all 0.2s",
-                textTransform: "uppercase", flexShrink: 0,
-              }}
-              onMouseEnter={e => { if (inputValue.trim() && !isLoading) { e.currentTarget.style.background = `${acc}0.18)`; e.currentTarget.style.color = `${acc}1)`; }}}
-              onMouseLeave={e => { if (inputValue.trim() && !isLoading) { e.currentTarget.style.background = `${acc}0.1)`; e.currentTarget.style.color = `${acc}0.82)`; }}}
-            >
-              Send
-            </button>
+            {/* Active input glow when focused */}
+            <div style={{ padding: "11px 16px 13px", display: "flex", gap: "8px", alignItems: "center" }}>
+              {/* Mic / channel icon */}
+              <div style={{
+                width: 26, height: 26, flexShrink: 0,
+                border: `1px solid ${acc}0.14)`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <motion.div
+                  animate={{ opacity: inputValue.trim() ? [0.6, 1, 0.6] : 0.22 }}
+                  transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                  style={{ width: 5, height: 5, borderRadius: "50%", background: `${acc}0.7)` }}
+                />
+              </div>
+              <input
+                ref={inputRef}
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") sendMessage(); }}
+                placeholder="Query the investigation..."
+                style={{
+                  flex: 1, background: "transparent",
+                  border: "none", borderBottom: `1px solid ${acc}0.12)`,
+                  color: `${acc}0.88)`,
+                  padding: "6px 2px", fontSize: "0.875rem",
+                  fontFamily: "inherit", outline: "none", cursor: "text",
+                  transition: "border-color 0.25s",
+                }}
+                onFocus={e  => (e.target.style.borderBottomColor = `${acc}0.42)`)}
+                onBlur={e   => (e.target.style.borderBottomColor = `${acc}0.12)`)}
+              />
+              <button onClick={sendMessage} disabled={!inputValue.trim() || isLoading}
+                style={{
+                  background: !inputValue.trim() || isLoading ? "none" : `${acc}0.09)`,
+                  border: `1px solid ${acc}${!inputValue.trim() || isLoading ? "0.08)" : "0.26)"}`,
+                  color: `${acc}${!inputValue.trim() || isLoading ? "0.16)" : "0.78)"}`,
+                  padding: "7px 14px", fontSize: "0.72rem", letterSpacing: "0.18em",
+                  cursor: "none", fontFamily: "inherit", transition: "all 0.2s",
+                  textTransform: "uppercase", flexShrink: 0,
+                }}
+                onMouseEnter={e => { if (inputValue.trim() && !isLoading) { e.currentTarget.style.background = `${acc}0.16)`; e.currentTarget.style.color = `${acc}1)`; }}}
+                onMouseLeave={e => { if (inputValue.trim() && !isLoading) { e.currentTarget.style.background = `${acc}0.09)`; e.currentTarget.style.color = `${acc}0.78)`; }}}
+              >
+                Transmit
+              </button>
+            </div>
           </div>
 
           {/* Pitch key */}
