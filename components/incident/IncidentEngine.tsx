@@ -557,6 +557,10 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
 
   const assistantCardTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const panelActiveTimer   = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const sweepOuterTimer    = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const sweepInnerTimer    = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const verdictMsgSentRef  = useRef(false);
+  const [edgeSweepActive,  setEdgeSweepActive]  = useState(false);
 
   // Intro sequence
   const [introPhase, setIntroPhase] = useState<"hold" | "reveal" | "active">("hold");
@@ -574,6 +578,21 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
       return () => clearTimeout(t);
     }
   }, [step, incident.steps.length]);
+
+  // Edge sweep — random 8-12s interval, feels like powered broadcast equipment
+  useEffect(() => {
+    const schedule = () => {
+      sweepOuterTimer.current = setTimeout(() => {
+        setEdgeSweepActive(true);
+        sweepInnerTimer.current = setTimeout(() => {
+          setEdgeSweepActive(false);
+          schedule();
+        }, 2200);
+      }, 8000 + Math.random() * 4000);
+    };
+    schedule();
+    return () => { clearTimeout(sweepOuterTimer.current); clearTimeout(sweepInnerTimer.current); };
+  }, []);
 
   const palette  = POV_PALETTE[pov];
   const stepData = incident.steps[step];
@@ -625,6 +644,30 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     return () => window.removeEventListener("keydown", onKey);
   }, [goNext, goPrev]);
 
+  // Radio headset click — very short noise burst, bandpass-filtered, referee comms feel
+  const playRadioClick = useCallback(() => {
+    try {
+      const ctx  = new AudioContext();
+      const buf  = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.055), ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t  = i / ctx.sampleRate;
+        const env = t < 0.003 ? t / 0.003 : Math.max(0, 1 - (t - 0.003) / 0.052);
+        data[i]  = (Math.random() * 2 - 1) * env * 0.13;
+      }
+      const src    = ctx.createBufferSource();
+      src.buffer   = buf;
+      const filter = ctx.createBiquadFilter();
+      filter.type  = "bandpass";
+      filter.frequency.value = 2600;
+      filter.Q.value         = 0.7;
+      src.connect(filter);
+      filter.connect(ctx.destination);
+      src.start();
+      setTimeout(() => ctx.close(), 300);
+    } catch { /* audio blocked — silently skip */ }
+  }, []);
+
   const applyAction = useCallback((action: VarAction | null) => {
     if (!action) return;
     if (action.type === "goToStep" && typeof action.value === "number")
@@ -634,6 +677,42 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
       setTimeout(() => setAssistantHighlights([]), 6000);
     }
   }, [incident.steps.length]);
+
+  const sendDirect = useCallback(async (directMsg: string) => {
+    const msg = directMsg.trim();
+    if (!msg || isLoading) return;
+    setInputValue("");
+    setAssistantHighlights([]);
+    setAssistantCard(null);
+    clearTimeout(assistantCardTimer.current);
+    setMessages(prev => [...prev, { role: "user", text: msg, timestamp: Date.now() }]);
+    setIsLoading(true);
+    try {
+      const res  = await fetch("/api/var-chat", {
+        method : "POST",
+        headers: { "Content-Type": "application/json" },
+        body   : JSON.stringify({ message: msg, incidentContext, currentStep: step, stepLabel: stepData.label, stepTitle: stepData.title }),
+      });
+      const data = await res.json() as VarChatResponse;
+      playRadioClick();
+      setMessages(prev => [...prev, {
+        role     : "assistant",
+        text     : data.text,
+        stepRef  : data.action?.type === "goToStep" ? (data.action.value ?? undefined) : undefined,
+        timestamp: Date.now(),
+      }]);
+      setAssistantCard(data.text);
+      assistantCardTimer.current = setTimeout(() => setAssistantCard(null), 7000);
+      clearTimeout(panelActiveTimer.current);
+      setPanelActive(true);
+      panelActiveTimer.current = setTimeout(() => setPanelActive(false), 2200);
+      applyAction(data.action);
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", text: "Analysis feed interrupted. Review the timeline manually.", timestamp: Date.now() }]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading, incidentContext, step, stepData, applyAction, playRadioClick]);
 
   const sendMessage = useCallback(async () => {
     const msg = inputValue.trim();
@@ -651,6 +730,8 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
         body   : JSON.stringify({ message: msg, incidentContext, currentStep: step, stepLabel: stepData.label, stepTitle: stepData.title }),
       });
       const data = await res.json() as VarChatResponse;
+      // Radio headset click signals incoming transmission
+      playRadioClick();
       setMessages(prev => [...prev, {
         role     : "assistant",
         text     : data.text,
@@ -671,7 +752,33 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     }
   }, [inputValue, isLoading, incidentContext, step, stepData, applyAction]);
 
-  const quickPrompts = ["Why is this offside?", "Show me the evidence", "Who is the last defender?", "Explain Law 11"];
+  // Verdict auto-message — when entering step 4, assistant delivers final determination
+  useEffect(() => {
+    if (step === incident.steps.length - 1 && introPhase === "active" && !verdictMsgSentRef.current) {
+      verdictMsgSentRef.current = true;
+      const t = setTimeout(() => {
+        playRadioClick();
+        clearTimeout(panelActiveTimer.current);
+        setPanelActive(true);
+        panelActiveTimer.current = setTimeout(() => setPanelActive(false), 2200);
+        setMessages(prev => [...prev, {
+          role     : "assistant",
+          text     : "Final determination ready. Evidence review complete — Law 11 criteria satisfied. Havertz 3.0m beyond the defensive line at the moment of the pass. Reviewing officer's call confirmed.",
+          timestamp: Date.now(),
+          stepRef  : incident.steps.length - 1,
+        }]);
+      }, 1700); // fires after the 1.4s verdict lock expires + buffer
+      return () => clearTimeout(t);
+    }
+  }, [step, incident.steps.length, introPhase, playRadioClick]);
+
+  // Investigation commands — replaces generic quick prompts
+  const investigationCommands = [
+    { label: "▶  Review Pass Frame",      message: "Review the pass frame. Walk me through what the camera shows at the exact moment the ball was played." },
+    { label: "▶  Identify Last Defender", message: "Identify the last defender. Confirm their position and establish the offside reference line." },
+    { label: "▶  Apply Law 11",           message: "Apply Law 11 to this incident. Are the offside criteria satisfied?" },
+    { label: "▶  Generate Verdict",       message: "Generate the final VAR determination. Deliver your verdict." },
+  ];
 
   const showOverlays = introPhase === "active" && !verdictLocked;
 
@@ -1150,9 +1257,19 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
         {/* VAR Assistant */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, position: "relative" }}>
 
-          {/* Breathing edge light — left border, slow pulse */}
+          {/* ── Stadium blue ambient — large, breathing, Champions League night ── */}
           <motion.div
-            animate={{ opacity: [0.28, 0.62, 0.28] }}
+            animate={{ opacity: isLoading ? [0.7, 1, 0.7] : [0.45, 0.78, 0.45] }}
+            transition={{ duration: isLoading ? 1.0 : 7, repeat: Infinity, ease: "easeInOut" }}
+            style={{
+              position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
+              background: "radial-gradient(ellipse 88% 60% at 50% 6%, rgba(110,170,255,0.13) 0%, rgba(110,170,255,0.05) 44%, transparent 76%)",
+            }}
+          />
+
+          {/* ── Breathing edge light — left border ── */}
+          <motion.div
+            animate={{ opacity: [0.28, 0.66, 0.28] }}
             transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
             style={{
               position: "absolute", left: 0, top: "8%", bottom: "8%", width: "1px",
@@ -1161,38 +1278,57 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             }}
           />
 
-          {/* Panel glow overlay — briefly intensifies on transmission */}
+          {/* ── Panel glow — briefly intensifies on transmission ── */}
           <AnimatePresence>
             {panelActive && (
               <motion.div
                 key="panel-glow"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 1.0, ease: "easeOut" } }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
+                exit={{ opacity: 0, transition: { duration: 1.1, ease: "easeOut" } }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
                 style={{
                   position: "absolute", inset: 0, pointerEvents: "none", zIndex: 0,
-                  background: `radial-gradient(ellipse at 50% 20%, rgba(${palette.accent},0.05) 0%, transparent 68%)`,
+                  background: `radial-gradient(ellipse 80% 50% at 50% 10%, rgba(110,170,255,0.10) 0%, rgba(${palette.accent},0.04) 55%, transparent 78%)`,
                 }}
               />
             )}
           </AnimatePresence>
 
-          {/* VAR Operations Console Header */}
+          {/* ── VAR Operations Console Header ── */}
           <div style={{
             flexShrink: 0,
             borderBottom: `1px solid ${acc}0.09)`,
             position: "relative", overflow: "hidden",
           }}>
-            {/* Top edge illumination line */}
+            {/* Steady ambient top line */}
             <motion.div
-              animate={{ opacity: [0.4, 0.85, 0.4] }}
-              transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut" }}
+              animate={{ opacity: [0.35, 0.7, 0.35] }}
+              transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
               style={{
-                position: "absolute", top: 0, left: "15%", right: "15%", height: "1px",
-                background: `linear-gradient(90deg, transparent, ${acc}0.7), ${acc}0.7), transparent)`,
+                position: "absolute", top: 0, left: "12%", right: "12%", height: "1px",
+                background: `linear-gradient(90deg, transparent, rgba(110,170,255,0.75), rgba(110,170,255,0.75), transparent)`,
+                pointerEvents: "none",
               }}
             />
+
+            {/* ◉ Sweep — travels across header every 8-12s */}
+            <AnimatePresence>
+              {edgeSweepActive && (
+                <motion.div
+                  key="sweep"
+                  initial={{ x: "-110%", opacity: 0 }}
+                  animate={{ x: "210%", opacity: [0, 0.85, 0.85, 0] }}
+                  exit={{}}
+                  transition={{ duration: 1.9, ease: "linear" }}
+                  style={{
+                    position: "absolute", top: 0, left: 0, width: "55%", height: "1px",
+                    background: `linear-gradient(90deg, transparent, rgba(160,200,255,0.9), rgba(110,170,255,0.5), transparent)`,
+                    pointerEvents: "none",
+                  }}
+                />
+              )}
+            </AnimatePresence>
 
             {/* System label row */}
             <div style={{
@@ -1204,51 +1340,71 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <div style={{ fontSize: "0.58rem", letterSpacing: "0.18em", color: `${acc}0.18)`, textTransform: "uppercase" }}>
-                  Channel 01
+                  CH 01
                 </div>
-                <div style={{ width: 1, height: 10, background: `${acc}0.1)` }} />
-                <div style={{ fontSize: "0.58rem", letterSpacing: "0.14em", color: `${acc}0.16)`, textTransform: "uppercase" }}>
-                  Encrypted
+                <div style={{ width: 1, height: 8, background: `${acc}0.1)` }} />
+                <div style={{ fontSize: "0.58rem", letterSpacing: "0.14em", color: isLoading ? `rgba(110,170,255,0.38)` : `${acc}0.16)`, textTransform: "uppercase", transition: "color 0.4s" }}>
+                  {isLoading ? "Active" : "Encrypted"}
                 </div>
               </div>
             </div>
 
-            {/* LIVE indicator row */}
+            {/* ◉ Status indicator — CONNECTED / TRANSMITTING */}
             <div style={{ padding: "11px 22px 0", display: "flex", alignItems: "center", gap: "12px" }}>
-              {/* Pulsing ring indicator */}
+              {/* Pulsing ring — faster when transmitting */}
               <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
                 <motion.div
-                  animate={{ scale: [1, 2.0, 1], opacity: [0.55, 0, 0.55] }}
-                  transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                  animate={{ scale: [1, isLoading ? 2.5 : 1.9, 1], opacity: [0.6, 0, 0.6] }}
+                  transition={{ duration: isLoading ? 0.75 : 2.8, repeat: Infinity, ease: "easeInOut" }}
                   style={{
                     position: "absolute", inset: 0, borderRadius: "50%",
-                    border: `1px solid ${acc}0.55)`,
+                    border: `1px solid ${isLoading ? "rgba(110,170,255,0.8)" : `${acc}0.55)`}`,
+                    transition: "border-color 0.4s",
                   }}
                 />
                 <motion.div
-                  animate={{ opacity: [0.72, 1, 0.72] }}
-                  transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+                  animate={{ opacity: isLoading ? [0.8, 1, 0.8] : [0.65, 1, 0.65] }}
+                  transition={{ duration: isLoading ? 0.75 : 2.8, repeat: Infinity, ease: "easeInOut" }}
                   style={{
                     position: "absolute", inset: "2px", borderRadius: "50%",
-                    background: `${acc}0.82)`,
+                    background: isLoading ? "rgba(110,170,255,0.9)" : `${acc}0.82)`,
+                    transition: "background 0.4s",
                   }}
                 />
               </div>
-              <div style={{ fontSize: "0.75rem", letterSpacing: "0.22em", color: `${acc}0.72)`, textTransform: "uppercase", fontWeight: 300 }}>
-                VAR Official Connected
-              </div>
+
+              {/* CONNECTED / TRANSMITTING label — animated transition */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={isLoading ? "tx" : "cx"}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.28 }}
+                  style={{
+                    fontSize: "0.75rem", letterSpacing: "0.22em",
+                    color: isLoading ? "rgba(140,190,255,0.92)" : `${acc}0.72)`,
+                    textTransform: "uppercase", fontWeight: 300,
+                  }}
+                >
+                  {isLoading ? "VAR Official Transmitting" : "VAR Official Connected"}
+                </motion.div>
+              </AnimatePresence>
             </div>
 
-            {/* Divider with signal markers */}
+            {/* Divider + signal bars — bars animate faster when transmitting */}
             <div style={{ padding: "12px 22px 13px", display: "flex", alignItems: "center", gap: "10px" }}>
               <div style={{ flex: 1, height: "1px", background: `${acc}0.07)` }} />
-              {/* Signal strength bars */}
               <div style={{ display: "flex", gap: "2px", alignItems: "flex-end" }}>
                 {[3, 5, 7, 9, 7].map((h, i) => (
                   <motion.div key={i}
-                    animate={{ opacity: [0.3, i < 4 ? 0.7 : 0.25, 0.3] }}
-                    transition={{ duration: 2.1, repeat: Infinity, ease: "easeInOut", delay: i * 0.08 }}
-                    style={{ width: 2, height: h, background: `${acc}0.55)`, borderRadius: "1px" }}
+                    animate={{ opacity: isLoading ? [0.5, 1, 0.5] : [0.25, i < 4 ? 0.65 : 0.22, 0.25] }}
+                    transition={{ duration: isLoading ? 0.45 : 2.1, repeat: Infinity, ease: "easeInOut", delay: i * (isLoading ? 0.06 : 0.1) }}
+                    style={{
+                      width: 2, height: h, borderRadius: "1px",
+                      background: isLoading ? "rgba(110,170,255,0.8)" : `${acc}0.55)`,
+                      transition: "background 0.4s",
+                    }}
                   />
                 ))}
               </div>
@@ -1365,25 +1521,46 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick prompts */}
+          {/* Investigation commands */}
           {messages.length <= 1 && !isLoading && (
-            <div style={{ padding: "12px 22px 10px", display: "flex", flexWrap: "wrap", gap: "7px", flexShrink: 0, borderTop: `1px solid ${acc}0.06)` }}>
-              <div style={{ width: "100%", fontSize: "0.65rem", letterSpacing: "0.2em", color: `${acc}0.25)`, textTransform: "uppercase", marginBottom: "4px" }}>
-                Quick queries
+            <div style={{ padding: "10px 16px 10px", flexShrink: 0, borderTop: `1px solid ${acc}0.07)` }}>
+              <div style={{
+                fontSize: "0.58rem", letterSpacing: "0.38em", color: `${acc}0.22)`,
+                textTransform: "uppercase", marginBottom: "9px", paddingLeft: "2px",
+              }}>
+                Investigation Controls
               </div>
-              {quickPrompts.map((q, i) => (
-                <button key={i}
-                  onClick={() => { setInputValue(q); inputRef.current?.focus(); }}
+              {investigationCommands.map((cmd, i) => (
+                <motion.button key={i}
+                  onClick={() => sendDirect(cmd.message)}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.35, delay: i * 0.07 }}
                   style={{
-                    background: "none", border: `1px solid ${acc}0.14)`,
-                    color: `${acc}0.45)`, padding: "6px 12px",
-                    fontSize: "0.75rem", cursor: "none", fontFamily: "inherit", transition: "all 0.2s",
+                    display: "block", width: "100%", textAlign: "left",
+                    background: "none",
+                    border: "none",
+                    borderLeft: `1px solid ${acc}0.12)`,
+                    color: `${acc}0.5)`,
+                    padding: "7px 12px",
+                    fontSize: "0.78rem", letterSpacing: "0.04em",
+                    cursor: "none", fontFamily: "inherit",
+                    transition: "all 0.2s",
+                    marginBottom: "3px",
                   }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${acc}0.32)`; e.currentTarget.style.color = `${acc}0.75)`; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${acc}0.14)`; e.currentTarget.style.color = `${acc}0.45)`; }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderLeftColor = `${acc}0.6)`;
+                    e.currentTarget.style.color = `${acc}0.92)`;
+                    e.currentTarget.style.background = `${acc}0.04)`;
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderLeftColor = `${acc}0.12)`;
+                    e.currentTarget.style.color = `${acc}0.5)`;
+                    e.currentTarget.style.background = "none";
+                  }}
                 >
-                  {q}
-                </button>
+                  {cmd.label}
+                </motion.button>
               ))}
             </div>
           )}
