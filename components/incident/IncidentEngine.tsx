@@ -515,204 +515,378 @@ function AssistantPitchCard({ text, accent }: { text: string; accent: string }) 
 }
 
 // ── VARDecisionOverlay ───────────────────────────────────────────────────────
-// Signature visual announcement system — drawn from light, no audio.
-// Sequence: dark settle → radar rings → whistle draws → pulse → text → verdict
+// PitchLens signature VAR verdict ceremony.
+// 8-state cinematic sequence — visual-first, no audio.
+//
+// confidence → freeze → blackout → whistle → announce → impact → verdict → [exit]
 
 function VARDecisionOverlay({
   decision,
   onPulse,
-  onComplete,
 }: {
   decision: string;
-  onPulse  : () => void;
-  onComplete: () => void;
+  onPulse : () => void;
 }) {
-  const [seq, setSeq] = useState(0);
+  type Phase = "confidence" | "freeze" | "blackout" | "whistle" | "announce" | "impact" | "verdict";
+  const [phase,      setPhase]      = useState<Phase>("confidence");
+  const [confidence, setConfidence] = useState(82);
+  const [showPulse,  setShowPulse]  = useState(false);
+  const [shaking,    setShaking]    = useState(false);
 
+  // Confidence progression — 82 → 99 over ~2.4 seconds
   useEffect(() => {
-    const timers = [
-      setTimeout(() => setSeq(1), 120),   // radar rings begin
-      setTimeout(() => setSeq(2), 650),   // whistle draws
-      setTimeout(() => setSeq(3), 1900),  // whistle complete → pulse
-      setTimeout(() => setSeq(4), 2550),  // "VAR DECISION" text
-      setTimeout(() => setSeq(5), 3200),  // verdict text
+    const steps: [number, number][] = [
+      [87, 470], [91, 960], [95, 1450], [98, 1930], [99, 2360],
     ];
-    return () => timers.forEach(clearTimeout);
+    const ts = steps.map(([v, d]) => setTimeout(() => setConfidence(v), d));
+    return () => ts.forEach(clearTimeout);
   }, []);
 
-  useEffect(() => { if (seq === 3) onPulse(); }, [seq, onPulse]);
+  // Phase timeline
+  useEffect(() => {
+    const ts: ReturnType<typeof setTimeout>[] = [
+      setTimeout(() => setPhase("freeze"),    2360),  // 99% hit
+      setTimeout(() => setPhase("blackout"),  2660),  // stadium darkens
+      setTimeout(() => setPhase("whistle"),   3780),  // whistle materialises
+      setTimeout(() => setPhase("announce"),  6200),  // "VAR Review Complete"
+      setTimeout(() => setPhase("impact"),    7900),  // pulse moment
+      setTimeout(() => {
+        setShowPulse(true);
+        setShaking(true);
+        onPulse();
+        setTimeout(() => setShaking(false), 600);
+      }, 7900),
+      setTimeout(() => setPhase("verdict"),   9400),  // final verdict
+    ];
+    return () => ts.forEach(clearTimeout);
+  }, [onPulse]);
 
-  // Whistle SVG paths — each draws itself with staggered pathLength animation
-  // Body: ellipse at cx=156, cy=44, rx=44, ry=38
-  // Mouthpiece: U-shape with rounded left end
-  // Pea: inner circle
-  // Air slot: short line on top of body
-  const strokeBlue  = "rgba(110,170,255,0.78)";
-  const strokeFaint = "rgba(110,170,255,0.45)";
+  const darkPhases: Phase[] = ["blackout", "whistle", "announce", "impact", "verdict"];
+  const isDark       = darkPhases.includes(phase);
+  const showWhistle  = ["whistle", "announce", "impact", "verdict"].includes(phase);
+  const showAnnounce = ["announce", "impact", "verdict"].includes(phase);
+  const showVerdict  = phase === "verdict";
+
+  const B  = "rgba(110,170,255,";
+  const BS = "rgba(80,140,255,";
+
+  // Whistle geometry — ViewBox 0 0 260 112
+  // Body ellipse: cx=195, cy=56, rx=58, ry=50
+  // Mouthpiece U-shape with rounded left end
+  // Pea: cx=195, cy=56, r=16
+  const W = {
+    body: "M 137 56 A 58 50 0 0 1 195 6 A 58 50 0 0 1 253 56 A 58 50 0 0 1 195 106 A 58 50 0 0 1 137 56 Z",
+    tube: "M 137 37 L 10 37 Q 4 37 4 44 L 4 68 Q 4 75 10 75 L 137 75",
+    pea : "M 211 56 A 16 16 0 0 1 195 72 A 16 16 0 0 1 179 56 A 16 16 0 0 1 195 40 A 16 16 0 0 1 211 56 Z",
+    slot: "M 178 8 L 210 8",
+    spec: "M 152 24 A 50 40 0 0 1 220 13",   // specular edge on body
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, transition: { duration: 1.2, ease: "easeIn" } }}
-      transition={{ duration: 0.55 }}
-      onAnimationComplete={(def) => { if (def === "exit") onComplete(); }}
+      animate={{
+        opacity: 1,
+        x: shaking ? [0, -7, 5, -4, 2, -1, 0] : 0,
+        y: shaking ? [0,  4, -2,  3, -1,  1, 0] : 0,
+      }}
+      exit={{ opacity: 0, transition: { duration: 1.6, ease: "easeIn" } }}
+      transition={{
+        opacity: { duration: 0.5 },
+        x: { duration: shaking ? 0.55 : 0, ease: "easeOut" },
+        y: { duration: shaking ? 0.55 : 0, ease: "easeOut" },
+      }}
       style={{
         position: "absolute", inset: 0, zIndex: 35, pointerEvents: "none",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        // Semi-transparent: pitch texture faintly visible behind (like tinted glass)
-        background: "radial-gradient(ellipse at center, rgba(0,6,22,0.86) 0%, rgba(0,2,14,0.93) 100%)",
+        overflow: "hidden",
+        fontFamily: "var(--font-inter), Inter, sans-serif",
       }}
     >
-      {/* ── Radar rings — emanate from centre ── */}
-      {seq >= 1 && (
-        <svg
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}
-          viewBox="0 0 100 100"
-          preserveAspectRatio="xMidYMid slice"
-        >
-          {[0, 0.7, 1.4].map((delay, i) => (
-            <motion.circle
-              key={i}
-              cx="50" cy="50"
-              fill="none"
-              stroke={`rgba(110,170,255,${0.16 - i * 0.04})`}
-              strokeWidth="0.25"
-              initial={{ r: 6, opacity: 0.55 }}
-              animate={{ r: [6, 48], opacity: [0.5, 0] }}
-              transition={{ duration: 2.8, delay, repeat: Infinity, ease: "easeOut" }}
-            />
-          ))}
-        </svg>
-      )}
 
-      {/* ── Whistle SVG — constructed from light ── */}
-      {seq >= 2 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.25 }}
-          style={{ position: "relative", marginBottom: "32px" }}
-        >
-          <svg
-            width="192" height="84"
-            viewBox="0 0 200 88"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {/* Body — ellipse traced as a path for smooth pathLength control */}
-            <motion.path
-              d="M 112 44
-                 A 44 38 0 0 1 156 6
-                 A 44 38 0 0 1 200 44
-                 A 44 38 0 0 1 156 82
-                 A 44 38 0 0 1 112 44 Z"
-              stroke={strokeBlue} strokeWidth="1.5"
-              initial={{ pathLength: 0, opacity: 0.9 }}
-              animate={{ pathLength: 1, opacity: 0.9 }}
-              transition={{ duration: 1.05, ease: [0.4, 0, 0.2, 1], delay: 0 }}
-            />
+      {/* ── Background — transparent in confidence, void in blackout ── */}
+      <motion.div
+        animate={{ opacity: isDark ? 1 : 0 }}
+        transition={{ duration: isDark ? 1.1 : 0.3, ease: "easeInOut" }}
+        style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(ellipse at center, rgba(0,6,26,0.90) 0%, rgba(0,2,14,0.97) 100%)",
+        }}
+      />
 
-            {/* Mouthpiece — U-shape, draws from body end to tip and back */}
-            <motion.path
-              d="M 112 26 L 8 26 Q 2 26 2 32 L 2 56 Q 2 62 8 62 L 112 62"
-              stroke={strokeBlue} strokeWidth="1.5"
-              initial={{ pathLength: 0, opacity: 0.9 }}
-              animate={{ pathLength: 1, opacity: 0.9 }}
-              transition={{ duration: 0.85, ease: [0.4, 0, 0.2, 1], delay: 0.38 }}
-            />
-
-            {/* Pea (inner circle) */}
-            <motion.path
-              d="M 166 44 A 10 10 0 0 1 156 54 A 10 10 0 0 1 146 44 A 10 10 0 0 1 156 34 A 10 10 0 0 1 166 44 Z"
-              stroke={strokeFaint} strokeWidth="1.2"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 1 }}
-              transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1], delay: 0.82 }}
-            />
-
-            {/* Air slot on top of body */}
-            <motion.path
-              d="M 146 8 L 166 8"
-              stroke={strokeFaint} strokeWidth="1.4"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: 0.65 }}
-              transition={{ duration: 0.28, ease: "easeOut", delay: 1.05 }}
-            />
-          </svg>
-
-          {/* ── Whistle pulse ring — fires at seq 3 ── */}
-          {seq >= 3 && (
-            <motion.div
-              initial={{ scale: 0.6, opacity: 0.7 }}
-              animate={{ scale: 3.2, opacity: 0 }}
-              transition={{ duration: 1.0, ease: "easeOut" }}
+      {/* ── Scanning lines — State 1: confidence / freeze ── */}
+      {(phase === "confidence" || phase === "freeze") && (
+        <>
+          {[0, 0.28, 0.56, 0.84].map((offset, i) => (
+            <motion.div key={`hs${i}`}
+              animate={{ y: ["-5%", "115%"] }}
+              transition={{ duration: 3.0, delay: offset * 3.0, repeat: Infinity, ease: "linear" }}
               style={{
-                position: "absolute",
-                top: "50%", left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: 80, height: 60,
-                borderRadius: "50%",
-                border: "1px solid rgba(110,170,255,0.6)",
-                pointerEvents: "none",
+                position: "absolute", left: 0, right: 0, top: 0, height: "22%", pointerEvents: "none",
+                background: `linear-gradient(180deg, transparent 0%, ${B}0.03) 45%, ${B}0.05) 55%, ${B}0.03) 68%, transparent 100%)`,
               }}
             />
-          )}
-        </motion.div>
+          ))}
+          {[0, 1.55].map((delay, i) => (
+            <motion.div key={`vs${i}`}
+              animate={{ x: ["-8%", "115%"] }}
+              transition={{ duration: 4.2, delay, repeat: Infinity, ease: "linear" }}
+              style={{
+                position: "absolute", top: 0, bottom: 0, left: 0, width: "7%", pointerEvents: "none",
+                background: `linear-gradient(90deg, transparent, ${B}0.07), transparent)`,
+              }}
+            />
+          ))}
+        </>
       )}
 
-      {/* ── "VAR DECISION" label ── */}
-      {seq >= 4 && (
-        <motion.div
-          initial={{ opacity: 0, letterSpacing: "0.24em" }}
-          animate={{ opacity: 1, letterSpacing: "0.46em" }}
-          transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            fontSize: "0.7rem",
-            color: "rgba(110,170,255,0.5)",
-            textTransform: "uppercase",
-            fontWeight: 300,
-            marginBottom: "14px",
-          }}
-        >
-          VAR Decision
-        </motion.div>
-      )}
-
-      {/* ── Verdict text ── */}
-      {seq >= 5 && (
+      {/* ── Corner energy convergence — State 3: blackout ── */}
+      {isDark && (
         <>
+          {[
+            `radial-gradient(circle at 0% 0%, ${BS}0.20) 0%, transparent 65%)`,
+            `radial-gradient(circle at 100% 0%, ${BS}0.13) 0%, transparent 60%)`,
+            `radial-gradient(circle at 0% 100%, ${BS}0.13) 0%, transparent 60%)`,
+            `radial-gradient(circle at 100% 100%, ${BS}0.10) 0%, transparent 58%)`,
+          ].map((bg, i) => (
+            <motion.div key={`cr${i}`}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ duration: 1.4, delay: i * 0.07, ease: "easeOut" }}
+              style={{ position: "absolute", inset: 0, background: bg, pointerEvents: "none" }}
+            />
+          ))}
+        </>
+      )}
+
+      {/* ── Confidence counter — top right, broadcast terminal ── */}
+      {(phase === "confidence" || phase === "freeze") && (
+        <div style={{ position: "absolute", top: 18, right: 20, textAlign: "right", userSelect: "none" }}>
+          <div style={{ fontSize: "0.55rem", letterSpacing: "0.36em", color: `${B}0.32)`, textTransform: "uppercase", marginBottom: 5 }}>
+            VAR Analysis
+          </div>
+          <div style={{ fontSize: "0.56rem", letterSpacing: "0.22em", color: `${B}0.22)`, textTransform: "uppercase", marginBottom: 9 }}>
+            Confidence
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 3 }}>
+            <AnimatePresence mode="wait">
+              <motion.span key={confidence}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: phase === "freeze" ? 0 : 0.22 }}
+                style={{
+                  fontSize: "2.6rem", fontWeight: 200, letterSpacing: "0.01em", lineHeight: 1,
+                  color: confidence >= 99 ? "rgba(180,220,255,0.97)" : `${B}0.84)`,
+                }}
+              >
+                {confidence}
+              </motion.span>
+            </AnimatePresence>
+            <span style={{ fontSize: "1.1rem", color: `${B}0.40)`, fontWeight: 300 }}>%</span>
+          </div>
+          {/* Progress rail */}
+          <div style={{ marginTop: 7, width: 84, height: 1, background: `${B}0.10)` }}>
+            <motion.div
+              animate={{ width: `${confidence}%` }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
+              style={{ height: "100%", background: `linear-gradient(90deg, ${B}0.38), ${B}0.72))` }}
+            />
+          </div>
           <motion.div
-            initial={{ scaleX: 0, opacity: 0 }}
-            animate={{ scaleX: 1, opacity: 0.35 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            style={{ width: 64, height: "1px", background: "rgba(220,80,80,0.7)", marginBottom: "14px", transformOrigin: "center" }}
-          />
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
-            style={{
-              fontSize: "clamp(1.3rem, 3.2vw, 2.1rem)",
-              letterSpacing: "0.14em",
-              color: "rgba(220,80,80,0.94)",
-              textTransform: "uppercase",
-              fontWeight: 200,
-              textAlign: "center",
-              lineHeight: 1.2,
-              whiteSpace: "pre-line",
-            }}
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 1.0, repeat: Infinity }}
+            style={{ fontSize: "0.5rem", letterSpacing: "0.28em", color: `${B}0.26)`, textTransform: "uppercase", marginTop: 7 }}
           >
-            {decision}
+            {confidence < 99 ? "Calculating" : "Lock"}
+          </motion.div>
+        </div>
+      )}
+
+      {/* ── Freeze flash — brief luminance at 99% ── */}
+      {phase === "freeze" && (
+        <motion.div
+          initial={{ opacity: 0.18 }}
+          animate={{ opacity: 0 }}
+          transition={{ duration: 0.30, ease: "easeOut" }}
+          style={{ position: "absolute", inset: 0, background: `${B}0.08)`, pointerEvents: "none" }}
+        />
+      )}
+
+      {/* ── Whistle — holographic presence, State 4 ── */}
+      <AnimatePresence>
+        {showWhistle && (
+          <motion.div
+            key="whistle"
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.78, transition: { duration: 0.9 } }}
+            transition={{ duration: 1.9, ease: [0.16, 1, 0.3, 1] }}
+            style={{ position: "relative", marginBottom: showAnnounce ? 34 : 0 }}
+          >
+            {/* Slow push-in — camera settling onto the whistle */}
+            <motion.div
+              animate={{ scale: [0.89, 1.07] }}
+              transition={{ duration: 4.2, ease: [0.16, 1, 0.3, 1] }}
+            >
+              {/* Floating idle */}
+              <motion.div
+                animate={{ y: [0, -10, 0], rotateZ: [-1.4, 1.4, -1.4] }}
+                transition={{ duration: 5.8, repeat: Infinity, ease: "easeInOut" }}
+                style={{ position: "relative" }}
+              >
+
+                {/* Volumetric fog — large elliptical glow behind whistle */}
+                <motion.div
+                  animate={{ opacity: [0.28, 0.52, 0.28], scale: [0.93, 1.08, 0.93] }}
+                  transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut" }}
+                  style={{
+                    position: "absolute", top: "50%", left: "50%",
+                    transform: "translate(-50%, -50%)",
+                    width: 440, height: 200, borderRadius: "50%", pointerEvents: "none",
+                    background: `radial-gradient(ellipse, ${BS}0.16) 0%, ${BS}0.05) 50%, transparent 75%)`,
+                  }}
+                />
+
+                {/* Three-layer holographic SVG stack */}
+                <div style={{ position: "relative", width: 300, height: 129 }}>
+
+                  {/* Layer 1: outer glow (heavy blur) */}
+                  <svg width="300" height="129" viewBox="0 0 260 112" fill="none"
+                    strokeLinecap="round" strokeLinejoin="round"
+                    style={{ position: "absolute", inset: 0, filter: "blur(11px)", opacity: 0.38, pointerEvents: "none" }}
+                  >
+                    <path d={W.body} stroke="rgba(65,135,255,0.95)" strokeWidth="6" />
+                    <path d={W.tube} stroke="rgba(65,135,255,0.95)" strokeWidth="6" />
+                  </svg>
+
+                  {/* Layer 2: mid glow */}
+                  <svg width="300" height="129" viewBox="0 0 260 112" fill="none"
+                    strokeLinecap="round" strokeLinejoin="round"
+                    style={{ position: "absolute", inset: 0, filter: "blur(2.8px)", opacity: 0.70, pointerEvents: "none" }}
+                  >
+                    <path d={W.body} stroke="rgba(100,165,255,0.90)" strokeWidth="2.5" />
+                    <path d={W.tube} stroke="rgba(100,165,255,0.90)" strokeWidth="2.5" />
+                    <path d={W.pea}  stroke="rgba(100,165,255,0.58)" strokeWidth="1.8" />
+                  </svg>
+
+                  {/* Layer 3: crisp main strokes + glass fill */}
+                  <svg width="300" height="129" viewBox="0 0 260 112" fill="none"
+                    strokeLinecap="round" strokeLinejoin="round"
+                  >
+                    <path d={W.body} fill="rgba(80,140,255,0.055)" />
+                    <path d={W.body} stroke="rgba(162,212,255,0.92)" strokeWidth="1.3" />
+                    <path d={W.tube} stroke="rgba(162,212,255,0.92)" strokeWidth="1.3" />
+                    <path d={W.pea}  stroke="rgba(162,212,255,0.50)" strokeWidth="1.0" />
+                    <path d={W.slot} stroke="rgba(162,212,255,0.40)" strokeWidth="1.0" />
+                    <path d={W.spec} stroke="rgba(215,238,255,0.26)" strokeWidth="0.9" fill="none" />
+                  </svg>
+                </div>
+
+                {/* Shockwave rings — fire at impact phase */}
+                {showPulse && (
+                  <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }}>
+                    {[0, 0.13, 0.28].map((delay, i) => (
+                      <motion.div key={i}
+                        initial={{ scale: 0.7, opacity: 0.82 }}
+                        animate={{ scale: 7.5,  opacity: 0 }}
+                        transition={{ duration: 1.3, delay, ease: "easeOut" }}
+                        style={{
+                          position: "absolute", top: "50%", left: "50%",
+                          transform: "translate(-50%,-50%)",
+                          width: 90, height: 54, borderRadius: "50%",
+                          border: `1px solid rgba(110,180,255,${0.65 - i * 0.16})`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Announcement text — State 5: "VAR Review Complete / Decision Ready" ── */}
+      {showAnnounce && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          transition={{ duration: 0.85 }}
+          style={{ textAlign: "center", userSelect: "none" }}
+        >
+          <motion.div
+            initial={{ opacity: 0, letterSpacing: "0.16em" }}
+            animate={{ opacity: 1, letterSpacing: "0.40em" }}
+            transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
+            style={{ fontSize: "0.62rem", color: `${B}0.42)`, textTransform: "uppercase", fontWeight: 300, marginBottom: 9 }}
+          >
+            VAR Review Complete
           </motion.div>
           <motion.div
-            initial={{ scaleX: 0, opacity: 0 }}
-            animate={{ scaleX: 1, opacity: 0.35 }}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
-            style={{ width: 64, height: "1px", background: "rgba(220,80,80,0.7)", marginTop: "14px", transformOrigin: "center" }}
+            initial={{ opacity: 0, letterSpacing: "0.06em" }}
+            animate={{ opacity: 1, letterSpacing: "0.26em" }}
+            transition={{ duration: 0.95, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            style={{ fontSize: "0.72rem", color: `${B}0.24)`, textTransform: "uppercase", fontWeight: 300 }}
+          >
+            Decision Ready
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* ── Final verdict — State 8: large, authoritative, final ── */}
+      {showVerdict && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          transition={{ duration: 1.4, ease: "easeInOut" }}
+          style={{
+            position: "absolute", inset: 0,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            background: "radial-gradient(ellipse at center, rgba(0,6,26,0.84) 0%, transparent 72%)",
+            userSelect: "none",
+          }}
+        >
+          <motion.div
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
+            style={{ width: 80, height: "1px", background: "rgba(200,210,230,0.20)", marginBottom: 22, transformOrigin: "center" }}
           />
-        </>
+
+          {/* Primary verdict word — OFFSIDE / PENALTY / GOAL */}
+          <motion.div
+            initial={{ opacity: 0, y: 24, letterSpacing: "0.06em" }}
+            animate={{ opacity: 1, y: 0, letterSpacing: "0.22em" }}
+            transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+            style={{
+              fontSize: "clamp(2.1rem, 5.5vw, 3.5rem)",
+              color: "rgba(242,248,255,0.97)",
+              textTransform: "uppercase", fontWeight: 200,
+              textAlign: "center", lineHeight: 1.05,
+            }}
+          >
+            {decision.split(" ")[0]}
+          </motion.div>
+
+          {/* Secondary word — CONFIRMED / AWARDED / DISALLOWED */}
+          {decision.split(" ").length > 1 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.95, ease: [0.16, 1, 0.3, 1], delay: 0.72 }}
+              style={{
+                fontSize: "0.82rem", letterSpacing: "0.36em",
+                color: "rgba(170,195,230,0.40)",
+                textTransform: "uppercase", fontWeight: 300, marginTop: 15,
+              }}
+            >
+              {decision.split(" ").slice(1).join(" ")}
+            </motion.div>
+          )}
+
+          <motion.div
+            initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+            transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1], delay: 0.16 }}
+            style={{ width: 80, height: "1px", background: "rgba(200,210,230,0.20)", marginTop: 22, transformOrigin: "center" }}
+          />
+        </motion.div>
       )}
     </motion.div>
   );
@@ -1049,8 +1223,8 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     if (step === incident.steps.length - 1 && introPhase === "active" && !verdictCeremonyShownRef.current) {
       verdictCeremonyShownRef.current = true;
       setShowVerdictCeremony(true);
-      // Auto-dismiss after 5.8s (overlay handles its own exit animation)
-      const t = setTimeout(() => setShowVerdictCeremony(false), 5800);
+      // Auto-dismiss after 13.5s — gives the 8-state ceremony time to complete
+      const t = setTimeout(() => setShowVerdictCeremony(false), 13500);
       return () => clearTimeout(t);
     }
   }, [step, incident.steps.length, introPhase]);
@@ -1311,7 +1485,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           </motion.div> {/* /camera micro-impulse wrapper */}
 
           {/* VAR Decision Announcement — signature visual ceremony */}
-          <AnimatePresence>
+          <AnimatePresence onExitComplete={() => setVerdictSweepActive(true)}>
             {showVerdictCeremony && (
               <VARDecisionOverlay
                 key="var-decision"
@@ -1320,7 +1494,6 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
                   setVerdictImpulse(true);
                   setTimeout(() => setVerdictImpulse(false), 200);
                 }}
-                onComplete={() => setVerdictSweepActive(true)}
               />
             )}
           </AnimatePresence>
