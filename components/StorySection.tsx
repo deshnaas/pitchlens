@@ -36,13 +36,13 @@ const N = {
 // zoom = canvas scale
 
 const CAMERA_STEPS = [
-  { x: 0,    y: -480, zoom: 1.05 },  // 0  root — penalty awarded
-  { x: 0,    y: -180, zoom: 1.25 },  // 1  miss — ball drifts wide
-  { x: 0,    y:  100, zoom: 0.80 },  // 2  fracture — zoom out, see 3 branches
-  { x: -340, y:  390, zoom: 1.55 },  // 3  referee node
-  { x: 0,    y:  390, zoom: 1.55 },  // 4  fan node
-  { x: 340,  y:  390, zoom: 1.55 },  // 5  supporter node
-  { x: 0,    y:  520, zoom: 0.55 },  // 6  full tree reveal — all paths glowing
+  { x: 0,    y: -480, zoom: 0.90 },  // 0  root — penalty awarded     (start pulled back)
+  { x: 0,    y: -180, zoom: 1.40 },  // 1  miss — zoom IN close        (arrival feel)
+  { x: 0,    y:  100, zoom: 0.72 },  // 2  fracture — zoom OUT wide    (reveal 3 branches)
+  { x: -340, y:  390, zoom: 1.80 },  // 3  referee — zoom IN deep
+  { x: 0,    y:  390, zoom: 1.80 },  // 4  fan — zoom IN deep
+  { x: 340,  y:  390, zoom: 1.80 },  // 5  supporter — zoom IN deep
+  { x: 0,    y:  520, zoom: 0.48 },  // 6  full tree — big zoom OUT
 ] as const;
 
 // ── Content at each step ──────────────────────────────────────────────────────
@@ -305,28 +305,42 @@ function drawWorld(
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function StorySection({ visible, onComplete }: Props) {
-  const [step, setStep] = useState(0);
-  const canvasRef   = useRef<HTMLCanvasElement>(null);
-  const rafRef      = useRef<number>(0);
-  const startTimeRef= useRef<number>(0);
-  const accumRef    = useRef<number>(0);
-  const stepRef     = useRef<number>(0);
-  const advancingRef= useRef<boolean>(false);
-  const particlesRef= useRef<Particle[]>(initParticles());
-  const onCompleteRef = useRef(onComplete);
+  const [step,       setStep]       = useState(0);
+  const [dwellReady, setDwellReady] = useState(false);
+  const canvasRef      = useRef<HTMLCanvasElement>(null);
+  const rafRef         = useRef<number>(0);
+  const startTimeRef   = useRef<number>(0);
+  const accumRef       = useRef<number>(0);
+  const stepRef        = useRef<number>(0);
+  const advancingRef   = useRef<boolean>(false);
+  const lastAdvanceRef = useRef<number>(0);   // timestamp of last scene change
+  const particlesRef   = useRef<Particle[]>(initParticles());
+  const onCompleteRef  = useRef(onComplete);
+
+  // Minimum ms the user must dwell on each scene before scrolling advances it.
+  // Gives them time to actually read. After 2 s they're free to scroll forward.
+  const MIN_DWELL_MS = 2000;
 
   // Lerped camera state
   const camRef = useRef({ x: CAMERA_STEPS[0].x, y: CAMERA_STEPS[0].y, zoom: CAMERA_STEPS[0].zoom });
 
   useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
-  useEffect(() => { stepRef.current = step; }, [step]);
+  useEffect(() => {
+    stepRef.current = step;
+    // Reset dwell gate on every step change — user must wait before scrolling on
+    setDwellReady(false);
+    const t = setTimeout(() => setDwellReady(true), MIN_DWELL_MS);
+    return () => clearTimeout(t);
+  }, [step, MIN_DWELL_MS]);
 
   // ── Reset on show ──
   useEffect(() => {
     if (visible) {
       setStep(0);
+      setDwellReady(false);
       stepRef.current = 0;
       accumRef.current = 0;
+      lastAdvanceRef.current = Date.now();
       const target = CAMERA_STEPS[0];
       camRef.current = { x: target.x, y: target.y, zoom: target.zoom };
     }
@@ -354,7 +368,7 @@ export default function StorySection({ visible, onComplete }: Props) {
       const sw      = canvas.offsetWidth;
       const sh      = canvas.offsetHeight;
       const target  = CAMERA_STEPS[stepRef.current];
-      const LERP    = 0.062; // controls travel smoothness — lower = slower camera
+      const LERP    = 0.044; // controls travel smoothness — lower = slower, weightier camera
 
       // Lerp camera toward target
       const cam = camRef.current;
@@ -378,10 +392,21 @@ export default function StorySection({ visible, onComplete }: Props) {
   }, [visible]);
 
   // ── Advance ──
-  const advance = useCallback((delta: number) => {
+  const advance = useCallback((delta: number, ignoreDwell = false) => {
     if (advancingRef.current) return;
+
+    // Enforce minimum reading time before forwarding (going back is always instant)
+    if (delta > 0 && !ignoreDwell) {
+      if (Date.now() - lastAdvanceRef.current < MIN_DWELL_MS) {
+        // Reset accumulator so partial scrolls during dwell don't stack up
+        accumRef.current = 0;
+        return;
+      }
+    }
+
     advancingRef.current = true;
-    setTimeout(() => { advancingRef.current = false; }, 380);
+    setTimeout(() => { advancingRef.current = false; }, 550);
+    lastAdvanceRef.current = Date.now();
 
     const cur  = stepRef.current;
     const next = cur + delta;
@@ -392,7 +417,8 @@ export default function StorySection({ visible, onComplete }: Props) {
     }
     setStep(next);
     stepRef.current = next;
-  }, []);
+    accumRef.current = 0; // always clear after a real advance
+  }, [MIN_DWELL_MS]);
 
   // ── Wheel ──
   useEffect(() => {
@@ -400,9 +426,9 @@ export default function StorySection({ visible, onComplete }: Props) {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       accumRef.current += e.deltaY;
-      if (Math.abs(accumRef.current) >= 80) {
+      if (Math.abs(accumRef.current) >= 220) {
         advance(accumRef.current > 0 ? 1 : -1);
-        accumRef.current = 0;
+        // accumRef cleared inside advance(); partial drift decays naturally
       }
     };
     window.addEventListener("wheel", onWheel, { passive: false });
@@ -427,7 +453,7 @@ export default function StorySection({ visible, onComplete }: Props) {
     const onStart = (e: TouchEvent) => { touchY.current = e.touches[0].clientY; };
     const onEnd   = (e: TouchEvent) => {
       const dy = touchY.current - e.changedTouches[0].clientY;
-      if (Math.abs(dy) > 40) advance(dy > 0 ? 1 : -1);
+      if (Math.abs(dy) > 55) advance(dy > 0 ? 1 : -1);
     };
     window.addEventListener("touchstart", onStart, { passive: true });
     window.addEventListener("touchend",   onEnd,   { passive: true });
@@ -569,41 +595,99 @@ export default function StorySection({ visible, onComplete }: Props) {
             </AnimatePresence>
           </div>
 
-          {/* ── Scroll hint ── */}
+          {/* ── Scroll hint + dwell indicator ── */}
           {!isLastStep && (
-            <motion.div
-              className="absolute pointer-events-none flex flex-col items-center gap-2"
-              style={{ bottom: "5vh", left: "50%", transform: "translateX(-50%)" }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.0 }}
+            <div
+              className="absolute pointer-events-none flex flex-col items-center"
+              style={{ bottom: "5vh", left: "50%", transform: "translateX(-50%)", gap: "10px" }}
             >
+              {/* Dwell fill bar — grows from 0 → 100% over MIN_DWELL_MS, then pulses */}
+              <div style={{
+                width     : "44px",
+                height    : "1px",
+                background: "rgba(255,255,255,0.10)",
+                position  : "relative",
+                overflow  : "hidden",
+              }}>
+                <motion.div
+                  style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.50)", transformOrigin: "left" }}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: dwellReady ? 1 : 1 }}
+                  key={`dwell-${step}`}
+                  // Animate the fill over MIN_DWELL_MS, then hold
+                  transition={{ duration: MIN_DWELL_MS / 1000, ease: "linear" }}
+                />
+              </div>
+
+              {/* Animated line — only pulses once dwell is ready */}
               <motion.div
                 style={{
                   width     : "1px",
-                  height    : "28px",
-                  background: "linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)",
+                  height    : "24px",
+                  background: "linear-gradient(to bottom, rgba(255,255,255,0.4), transparent)",
                 }}
-                animate={{ scaleY: [1, 1.5, 1], opacity: [0.35, 0.7, 0.35] }}
-                transition={{ duration: 2, repeat: Infinity }}
+                animate={dwellReady
+                  ? { scaleY: [1, 1.5, 1], opacity: [0.4, 0.8, 0.4] }
+                  : { scaleY: 0.6,         opacity: 0.2               }
+                }
+                transition={dwellReady
+                  ? { duration: 1.8, repeat: Infinity }
+                  : { duration: 0.4 }
+                }
               />
-              <span style={{
-                fontFamily   : "var(--font-inter), sans-serif",
-                fontWeight   : 300,
-                fontSize     : "0.46rem",
-                letterSpacing: "0.3em",
-                textTransform: "uppercase",
-                color        : "rgba(255,255,255,0.22)",
-              }}>
-                Scroll to travel
-              </span>
-            </motion.div>
+
+              <motion.span
+                animate={{ opacity: dwellReady ? 0.32 : 0.12 }}
+                transition={{ duration: 0.5 }}
+                style={{
+                  fontFamily   : "var(--font-inter), sans-serif",
+                  fontWeight   : 300,
+                  fontSize     : "0.44rem",
+                  letterSpacing: "0.3em",
+                  textTransform: "uppercase",
+                  color        : "rgba(255,255,255,1)",
+                }}
+              >
+                {dwellReady ? "Scroll to travel" : "Reading…"}
+              </motion.span>
+            </div>
           )}
 
-          {/* ── Step counter (subtle, top-right) ── */}
+          {/* ── Skip button — top right, always available ── */}
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2, duration: 0.8 }}
+            onClick={() => onCompleteRef.current()}
+            style={{
+              position     : "absolute",
+              top          : "4vh",
+              right        : "3vw",
+              zIndex       : 20,
+              background   : "transparent",
+              border       : "1px solid rgba(255,255,255,0.14)",
+              color        : "rgba(255,255,255,0.38)",
+              fontFamily   : "var(--font-inter), sans-serif",
+              fontWeight   : 300,
+              fontSize     : "0.5rem",
+              letterSpacing: "0.34em",
+              textTransform: "uppercase",
+              padding      : "0.45rem 1.1rem",
+              cursor       : "none",
+              backdropFilter: "blur(4px)",
+            }}
+            whileHover={{
+              color        : "rgba(255,255,255,0.75)",
+              borderColor  : "rgba(255,255,255,0.35)",
+            }}
+          >
+            Skip →
+          </motion.button>
+
+          {/* ── Step counter (subtle) ── */}
           <div
             className="absolute pointer-events-none"
-            style={{ top: "3.5vh", right: "3vw", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}
+            style={{ top: "4vh", left: "3vw", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center" }}
           >
             {STEPS.map((_, i) => (
               <motion.div
