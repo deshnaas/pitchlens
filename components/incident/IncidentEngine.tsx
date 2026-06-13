@@ -945,6 +945,7 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
   const [verdictImpulse,   setVerdictImpulse]   = useState(false);
   const [showVerdictCeremony, setShowVerdictCeremony] = useState(false);
   const verdictCeremonyShownRef = useRef(false);
+  const [showCompletedPopup,  setShowCompletedPopup]  = useState(false);
 
   // Intro sequence
   const [introPhase, setIntroPhase] = useState<"hold" | "reveal" | "active">("hold");
@@ -1610,16 +1611,17 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
               {introPhase !== "active" ? "Begin →" : "Next →"}
             </motion.button>
           ) : (
-            <motion.button onClick={onBack}
+            <motion.button
+              onClick={() => setShowCompletedPopup(true)}
               style={{
-                background: "rgba(80,200,120,0.07)", border: "1px solid rgba(80,200,120,0.28)",
-                color: "rgba(80,200,120,0.82)", padding: "8px 24px", fontSize: "0.78rem",
+                background: `${acc}0.03)`, border: `1px solid ${acc}0.10)`,
+                color: `${acc}0.28)`, padding: "8px 24px", fontSize: "0.78rem",
                 letterSpacing: "0.18em", textTransform: "uppercase",
                 cursor: "none", fontFamily: "inherit", transition: "all 0.25s",
               }}
-              whileHover={{ backgroundColor: "rgba(80,200,120,0.14)", color: "rgba(80,200,120,1)" }}
+              whileHover={{ backgroundColor: `${acc}0.07)`, color: `${acc}0.48)`, borderColor: `${acc}0.20)` }}
             >
-              Return ↗
+              Next →
             </motion.button>
           )}
         </div>
@@ -2098,6 +2100,182 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           </div>
         </div>
       </aside>
+
+      {/* ══ Investigation Complete popup ══════════════════════════════════════ */}
+      <AnimatePresence>
+        {showCompletedPopup && (
+          <motion.div
+            key="completed-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35 }}
+            onClick={() => setShowCompletedPopup(false)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 80,
+              background: "rgba(0,2,12,0.72)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backdropFilter: "blur(6px)",
+              cursor: "none",
+            }}
+          >
+            <motion.div
+              key="completed-panel"
+              initial={{ opacity: 0, y: 28, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.97 }}
+              transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: "rgba(4,10,28,0.97)",
+                border: `1px solid ${acc}0.14)`,
+                boxShadow: `0 0 80px rgba(20,55,140,0.18), inset 0 0 60px rgba(10,30,80,0.08)`,
+                padding: "44px 52px",
+                maxWidth: "420px",
+                width: "90%",
+                textAlign: "center",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              {/* Subtle top edge accent */}
+              <motion.div
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  position: "absolute", top: 0, left: "10%", right: "10%",
+                  height: "1px", background: `linear-gradient(90deg, transparent, ${acc}0.55), transparent)`,
+                  transformOrigin: "center",
+                }}
+              />
+
+              {/* Check mark ring */}
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  width: 52, height: 52, borderRadius: "50%",
+                  border: `1px solid ${acc}0.28)`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  margin: "0 auto 28px",
+                  background: `${acc}0.04)`,
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                  <motion.path
+                    d="M5 11.5 L9.5 16 L17 7"
+                    stroke={`rgba(${palette.accent},0.72)`}
+                    strokeWidth="1.2"
+                    strokeLinecap="round" strokeLinejoin="round"
+                    initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+                    transition={{ duration: 0.55, delay: 0.45, ease: "easeOut" }}
+                  />
+                </svg>
+              </motion.div>
+
+              {/* Eyebrow */}
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ delay: 0.3, duration: 0.45 }}
+                style={{
+                  fontSize: "0.62rem", letterSpacing: "0.36em",
+                  color: `${acc}0.38)`, textTransform: "uppercase",
+                  fontWeight: 300, marginBottom: "16px",
+                }}
+              >
+                VAR Investigation
+              </motion.div>
+
+              {/* Headline */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.38, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  fontSize: "1.55rem", fontWeight: 200, letterSpacing: "0.08em",
+                  color: `${acc}0.94)`, textTransform: "uppercase",
+                  lineHeight: 1.15, marginBottom: "14px",
+                }}
+              >
+                Investigation<br />Complete
+              </motion.div>
+
+              {/* Divider */}
+              <motion.div
+                initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+                transition={{ delay: 0.5, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  height: "1px", width: "60px",
+                  background: `${acc}0.22)`,
+                  margin: "0 auto 18px", transformOrigin: "center",
+                }}
+              />
+
+              {/* Body */}
+              <motion.p
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ delay: 0.55, duration: 0.5 }}
+                style={{
+                  fontSize: "0.82rem", letterSpacing: "0.03em",
+                  color: `${acc}0.42)`, lineHeight: 1.8,
+                  fontWeight: 300, margin: "0 0 36px",
+                }}
+              >
+                All five steps reviewed. The VAR determination has been delivered. No further evidence to assess.
+              </motion.p>
+
+              {/* Action buttons */}
+              <motion.div
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.65, duration: 0.45 }}
+                style={{ display: "flex", gap: "12px", justifyContent: "center" }}
+              >
+                <button
+                  onClick={() => setShowCompletedPopup(false)}
+                  style={{
+                    background: "none", border: `1px solid ${acc}0.16)`,
+                    color: `${acc}0.40)`, padding: "9px 22px",
+                    fontSize: "0.72rem", letterSpacing: "0.2em",
+                    textTransform: "uppercase", cursor: "none",
+                    fontFamily: "inherit", transition: "all 0.25s",
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = `rgba(${palette.accent},0.32)`; (e.currentTarget as HTMLButtonElement).style.color = `rgba(${palette.accent},0.65)`; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = `rgba(${palette.accent},0.16)`; (e.currentTarget as HTMLButtonElement).style.color = `rgba(${palette.accent},0.40)`; }}
+                >
+                  Review Again
+                </button>
+                <button
+                  onClick={onBack}
+                  style={{
+                    background: `${acc}0.07)`, border: `1px solid ${acc}0.26)`,
+                    color: `${acc}0.82)`, padding: "9px 22px",
+                    fontSize: "0.72rem", letterSpacing: "0.2em",
+                    textTransform: "uppercase", cursor: "none",
+                    fontFamily: "inherit", transition: "all 0.25s",
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = `rgba(${palette.accent},0.14)`; (e.currentTarget as HTMLButtonElement).style.color = `rgba(${palette.accent},1)`; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = `rgba(${palette.accent},0.07)`; (e.currentTarget as HTMLButtonElement).style.color = `rgba(${palette.accent},0.82)`; }}
+                >
+                  Return ↗
+                </button>
+              </motion.div>
+
+              {/* Bottom edge accent */}
+              <motion.div
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  position: "absolute", bottom: 0, left: "10%", right: "10%",
+                  height: "1px", background: `linear-gradient(90deg, transparent, ${acc}0.18), transparent)`,
+                  transformOrigin: "center",
+                }}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
