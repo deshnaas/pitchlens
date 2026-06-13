@@ -514,6 +514,210 @@ function AssistantPitchCard({ text, accent }: { text: string; accent: string }) 
   );
 }
 
+// ── VARDecisionOverlay ───────────────────────────────────────────────────────
+// Signature visual announcement system — drawn from light, no audio.
+// Sequence: dark settle → radar rings → whistle draws → pulse → text → verdict
+
+function VARDecisionOverlay({
+  decision,
+  onPulse,
+  onComplete,
+}: {
+  decision: string;
+  onPulse  : () => void;
+  onComplete: () => void;
+}) {
+  const [seq, setSeq] = useState(0);
+
+  useEffect(() => {
+    const timers = [
+      setTimeout(() => setSeq(1), 120),   // radar rings begin
+      setTimeout(() => setSeq(2), 650),   // whistle draws
+      setTimeout(() => setSeq(3), 1900),  // whistle complete → pulse
+      setTimeout(() => setSeq(4), 2550),  // "VAR DECISION" text
+      setTimeout(() => setSeq(5), 3200),  // verdict text
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  useEffect(() => { if (seq === 3) onPulse(); }, [seq, onPulse]);
+
+  // Whistle SVG paths — each draws itself with staggered pathLength animation
+  // Body: ellipse at cx=156, cy=44, rx=44, ry=38
+  // Mouthpiece: U-shape with rounded left end
+  // Pea: inner circle
+  // Air slot: short line on top of body
+  const strokeBlue  = "rgba(110,170,255,0.78)";
+  const strokeFaint = "rgba(110,170,255,0.45)";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 1.2, ease: "easeIn" } }}
+      transition={{ duration: 0.55 }}
+      onAnimationComplete={(def) => { if (def === "exit") onComplete(); }}
+      style={{
+        position: "absolute", inset: 0, zIndex: 35, pointerEvents: "none",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        // Semi-transparent: pitch texture faintly visible behind (like tinted glass)
+        background: "radial-gradient(ellipse at center, rgba(0,6,22,0.86) 0%, rgba(0,2,14,0.93) 100%)",
+      }}
+    >
+      {/* ── Radar rings — emanate from centre ── */}
+      {seq >= 1 && (
+        <svg
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}
+          viewBox="0 0 100 100"
+          preserveAspectRatio="xMidYMid slice"
+        >
+          {[0, 0.7, 1.4].map((delay, i) => (
+            <motion.circle
+              key={i}
+              cx="50" cy="50"
+              fill="none"
+              stroke={`rgba(110,170,255,${0.16 - i * 0.04})`}
+              strokeWidth="0.25"
+              initial={{ r: 6, opacity: 0.55 }}
+              animate={{ r: [6, 48], opacity: [0.5, 0] }}
+              transition={{ duration: 2.8, delay, repeat: Infinity, ease: "easeOut" }}
+            />
+          ))}
+        </svg>
+      )}
+
+      {/* ── Whistle SVG — constructed from light ── */}
+      {seq >= 2 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.25 }}
+          style={{ position: "relative", marginBottom: "32px" }}
+        >
+          <svg
+            width="192" height="84"
+            viewBox="0 0 200 88"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {/* Body — ellipse traced as a path for smooth pathLength control */}
+            <motion.path
+              d="M 112 44
+                 A 44 38 0 0 1 156 6
+                 A 44 38 0 0 1 200 44
+                 A 44 38 0 0 1 156 82
+                 A 44 38 0 0 1 112 44 Z"
+              stroke={strokeBlue} strokeWidth="1.5"
+              initial={{ pathLength: 0, opacity: 0.9 }}
+              animate={{ pathLength: 1, opacity: 0.9 }}
+              transition={{ duration: 1.05, ease: [0.4, 0, 0.2, 1], delay: 0 }}
+            />
+
+            {/* Mouthpiece — U-shape, draws from body end to tip and back */}
+            <motion.path
+              d="M 112 26 L 8 26 Q 2 26 2 32 L 2 56 Q 2 62 8 62 L 112 62"
+              stroke={strokeBlue} strokeWidth="1.5"
+              initial={{ pathLength: 0, opacity: 0.9 }}
+              animate={{ pathLength: 1, opacity: 0.9 }}
+              transition={{ duration: 0.85, ease: [0.4, 0, 0.2, 1], delay: 0.38 }}
+            />
+
+            {/* Pea (inner circle) */}
+            <motion.path
+              d="M 166 44 A 10 10 0 0 1 156 54 A 10 10 0 0 1 146 44 A 10 10 0 0 1 156 34 A 10 10 0 0 1 166 44 Z"
+              stroke={strokeFaint} strokeWidth="1.2"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1], delay: 0.82 }}
+            />
+
+            {/* Air slot on top of body */}
+            <motion.path
+              d="M 146 8 L 166 8"
+              stroke={strokeFaint} strokeWidth="1.4"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: 1, opacity: 0.65 }}
+              transition={{ duration: 0.28, ease: "easeOut", delay: 1.05 }}
+            />
+          </svg>
+
+          {/* ── Whistle pulse ring — fires at seq 3 ── */}
+          {seq >= 3 && (
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0.7 }}
+              animate={{ scale: 3.2, opacity: 0 }}
+              transition={{ duration: 1.0, ease: "easeOut" }}
+              style={{
+                position: "absolute",
+                top: "50%", left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: 80, height: 60,
+                borderRadius: "50%",
+                border: "1px solid rgba(110,170,255,0.6)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
+        </motion.div>
+      )}
+
+      {/* ── "VAR DECISION" label ── */}
+      {seq >= 4 && (
+        <motion.div
+          initial={{ opacity: 0, letterSpacing: "0.24em" }}
+          animate={{ opacity: 1, letterSpacing: "0.46em" }}
+          transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+          style={{
+            fontSize: "0.7rem",
+            color: "rgba(110,170,255,0.5)",
+            textTransform: "uppercase",
+            fontWeight: 300,
+            marginBottom: "14px",
+          }}
+        >
+          VAR Decision
+        </motion.div>
+      )}
+
+      {/* ── Verdict text ── */}
+      {seq >= 5 && (
+        <>
+          <motion.div
+            initial={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: 1, opacity: 0.35 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            style={{ width: 64, height: "1px", background: "rgba(220,80,80,0.7)", marginBottom: "14px", transformOrigin: "center" }}
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              fontSize: "clamp(1.3rem, 3.2vw, 2.1rem)",
+              letterSpacing: "0.14em",
+              color: "rgba(220,80,80,0.94)",
+              textTransform: "uppercase",
+              fontWeight: 200,
+              textAlign: "center",
+              lineHeight: 1.2,
+              whiteSpace: "pre-line",
+            }}
+          >
+            {decision}
+          </motion.div>
+          <motion.div
+            initial={{ scaleX: 0, opacity: 0 }}
+            animate={{ scaleX: 1, opacity: 0.35 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
+            style={{ width: 64, height: "1px", background: "rgba(220,80,80,0.7)", marginTop: "14px", transformOrigin: "center" }}
+          />
+        </>
+      )}
+    </motion.div>
+  );
+}
+
 // ── Chat types ────────────────────────────────────────────────────────────────
 
 interface ChatMessage {
@@ -565,6 +769,8 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
   const [edgeSweepActive,  setEdgeSweepActive]  = useState(false);
   const [verdictSweepActive, setVerdictSweepActive] = useState(false);
   const [verdictImpulse,   setVerdictImpulse]   = useState(false);
+  const [showVerdictCeremony, setShowVerdictCeremony] = useState(false);
+  const verdictCeremonyShownRef = useRef(false);
 
   // Intro sequence
   const [introPhase, setIntroPhase] = useState<"hold" | "reveal" | "active">("hold");
@@ -672,32 +878,6 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
     } catch { /* audio blocked — silently skip */ }
   }, []);
 
-  // Referee whistle — short sine burst with LFO vibrato, natural whistle timbre
-  const playWhistle = useCallback(() => {
-    try {
-      const ctx  = new AudioContext();
-      const osc  = ctx.createOscillator();
-      const lfo  = ctx.createOscillator();
-      const lfoG = ctx.createGain();
-      const gain = ctx.createGain();
-      osc.type  = "sine";
-      osc.frequency.value = 2750;
-      lfo.frequency.value = 14;       // Hz wobble — authentic whistle flutter
-      lfoG.gain.value     = 35;       // Hz deviation
-      lfo.connect(lfoG);
-      lfoG.connect(osc.frequency);
-      gain.gain.setValueAtTime(0,    ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.16, ctx.currentTime + 0.018);
-      gain.gain.setValueAtTime(0.16, ctx.currentTime + 0.22);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.44);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      lfo.start(); osc.start();
-      lfo.stop(ctx.currentTime + 0.5);
-      osc.stop(ctx.currentTime + 0.5);
-      setTimeout(() => ctx.close(), 700);
-    } catch { /* audio blocked */ }
-  }, []);
 
   // Stadium crowd ambience — shaped noise, very low, atmospheric
   const startAmbience = useCallback(() => {
@@ -839,12 +1019,11 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
         }]);
       }, 1700));
 
-      // T+2900ms: Whistle + full-pitch sweep + camera micro-impulse
+      // T+2900ms: Panel glow intensifies (overlay is already doing the visual work)
       timers.push(setTimeout(() => {
-        playWhistle();
-        setVerdictSweepActive(true);
-        setVerdictImpulse(true);
-        timers.push(setTimeout(() => setVerdictImpulse(false), 200));
+        clearTimeout(panelActiveTimer.current);
+        setPanelActive(true);
+        panelActiveTimer.current = setTimeout(() => setPanelActive(false), 2000);
       }, 2900));
 
       // T+3900ms: Part 2 — final determination
@@ -863,7 +1042,18 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
 
       return () => timers.forEach(clearTimeout);
     }
-  }, [step, incident.steps.length, introPhase, playRadioClick, playWhistle]);
+  }, [step, incident.steps.length, introPhase, playRadioClick]);
+
+  // ── Verdict ceremony overlay trigger ─────────────────────────────────────────
+  useEffect(() => {
+    if (step === incident.steps.length - 1 && introPhase === "active" && !verdictCeremonyShownRef.current) {
+      verdictCeremonyShownRef.current = true;
+      setShowVerdictCeremony(true);
+      // Auto-dismiss after 5.8s (overlay handles its own exit animation)
+      const t = setTimeout(() => setShowVerdictCeremony(false), 5800);
+      return () => clearTimeout(t);
+    }
+  }, [step, incident.steps.length, introPhase]);
 
   // Investigation commands — replaces generic quick prompts
   const investigationCommands = [
@@ -1120,47 +1310,18 @@ export function IncidentEngine({ incident, pov = "referee", onBack }: IncidentEn
           </motion.div>
           </motion.div> {/* /camera micro-impulse wrapper */}
 
-          {/* Verdict dramatic pause overlay */}
+          {/* VAR Decision Announcement — signature visual ceremony */}
           <AnimatePresence>
-            {verdictLocked && (
-              <motion.div
-                key="verdict-pause"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 1.0, ease: "easeIn" } }}
-                transition={{ duration: 0.4 }}
-                style={{
-                  position: "absolute", inset: 0, zIndex: 25, pointerEvents: "none",
-                  background: "radial-gradient(ellipse at center, rgba(0,4,18,0.55) 0%, rgba(0,2,10,0.72) 100%)",
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16,
+            {showVerdictCeremony && (
+              <VARDecisionOverlay
+                key="var-decision"
+                decision={stepData.verdict?.decision ?? "Decision\nConfirmed"}
+                onPulse={() => {
+                  setVerdictImpulse(true);
+                  setTimeout(() => setVerdictImpulse(false), 200);
                 }}
-              >
-                {/* Top horizontal rule */}
-                <motion.div
-                  initial={{ scaleX: 0, opacity: 0 }}
-                  animate={{ scaleX: 1, opacity: 0.35 }}
-                  transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-                  style={{ width: 80, height: "1px", background: "rgba(220,80,80,0.6)", transformOrigin: "center" }}
-                />
-                <motion.div
-                  initial={{ opacity: 0, letterSpacing: "0.3em" }}
-                  animate={{ opacity: [0, 0.65, 0.65, 0], letterSpacing: ["0.3em", "0.52em", "0.52em", "0.58em"] }}
-                  transition={{ duration: 1.4, times: [0, 0.2, 0.75, 1] }}
-                  style={{
-                    fontSize: "0.72rem",
-                    color: "rgba(220,80,80,0.75)", textTransform: "uppercase",
-                    fontWeight: 300, textAlign: "center",
-                  }}
-                >
-                  VAR Decision
-                </motion.div>
-                <motion.div
-                  initial={{ scaleX: 0, opacity: 0 }}
-                  animate={{ scaleX: 1, opacity: 0.35 }}
-                  transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
-                  style={{ width: 80, height: "1px", background: "rgba(220,80,80,0.6)", transformOrigin: "center" }}
-                />
-              </motion.div>
+                onComplete={() => setVerdictSweepActive(true)}
+              />
             )}
           </AnimatePresence>
 
