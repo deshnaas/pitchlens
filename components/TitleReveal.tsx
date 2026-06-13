@@ -1,195 +1,165 @@
 "use client";
 
+import { motion, AnimatePresence } from "framer-motion";
+
 /**
- * TitleReveal — V2
+ * TitleReveal — V3
  *
- * Title is PERMANENT. It never disappears.
+ * Phase-driven. Framer Motion handles transitions.
+ * Title is PERMANENT — never disappears. Apple model.
  *
- * Behavior:
- *   progress 0.00 – 0.35 : title not yet visible
- *   progress 0.35 – 0.58 : characters blur-in left to right (staggered)
- *   progress 0.58 – 0.72 : title at full prominence, center screen
- *   progress 0.72 – 0.92 : title shrinks + rises toward top — always visible
- *   progress 0.92 – 1.00 : settled in top position, minimal but present
- *
- * Apple model: branding always present. Never abandoned.
+ * titlePhase 0 → invisible (black intro)
+ * titlePhase 1 → ghost (barely there, chars blurred — v1 playing)
+ * titlePhase 2 → emerging (staggered char blur-in — v2 playing)
+ * titlePhase 3 → full prominence + subtitle (v3 / v4 playing)
+ * titlePhase 4 → portal mode: shrinks, rises to top, still visible
  */
 
 interface Props {
-  progress: number;
+  titlePhase: number;
   parallax: { x: number; y: number };
-}
-
-// Smooth remap — clamps p into [inMin,inMax] then maps to [outMin,outMax]
-function remap(p: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
-  const t = Math.max(0, Math.min(1, (p - inMin) / (inMax - inMin)));
-  // Ease in-out cubic
-  const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  return outMin + eased * (outMax - outMin);
 }
 
 const CHARS = "PITCHLENS".split("");
 
-export default function TitleReveal({ progress, parallax }: Props) {
-  // How far along the "shrink to top" phase we are
-  const shrink = remap(progress, 0.72, 0.92, 0, 1);
+export default function TitleReveal({ titlePhase, parallax }: Props) {
+  const inPortalMode = titlePhase >= 4;
 
-  // Y offset: 0 (center) → -38vh (near top)
-  const translateY = shrink * -38; // vh units
-
-  // Scale: 1.0 (full size) → 0.42 (small but readable)
-  const scale = 1 - shrink * 0.58;
-
-  // Opacity: fades slightly when shrinking but NEVER below 0.5
-  const masterOpacity = Math.max(
-    0.5,
-    remap(progress, 0.35, 0.52, 0, 1) - shrink * 0.42
-  );
-
-  // Subtitle behavior: fades in then shrinks away as portals come
-  const subtitleOpacity = remap(progress, 0.58, 0.70, 0, 0.72) * (1 - shrink * 0.9);
-
-  // Subtle parallax — less movement than background
+  // Subtle parallax on title
   const px = parallax.x * -3;
   const py = parallax.y * -2.5;
-
-  // Scroll hint — visible only before user scrolls, gone quickly
-  const hintOpacity = remap(progress, 0.04, 0.14, 1, 0);
 
   return (
     <div
       className="absolute inset-0 flex items-center justify-center pointer-events-none"
       style={{ zIndex: 50 }}
     >
-      {/* ── PITCHLENS + subtitle wrapper ── */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          transform: `translate(${px}px, calc(${translateY}vh + ${py}px)) scale(${scale})`,
-          opacity: masterOpacity,
-          transformOrigin: "center center",
-          // No CSS transition — driven frame-by-frame via scroll progress
-          willChange: "transform, opacity",
+      {/* ── Master wrapper: handles shrink + rise in portal mode ── */}
+      <motion.div
+        style={{ x: px, transformOrigin: "center center" }}
+        animate={{
+          scale  : inPortalMode ? 0.44 : 1,
+          y      : inPortalMode ? "-36vh" : py,
+          opacity: inPortalMode ? 0.62 : titlePhase >= 1 ? 1 : 0,
         }}
+        transition={{
+          duration: inPortalMode ? 1.1 : 0.7,
+          ease    : [0.16, 1, 0.3, 1],
+        }}
+        className="flex flex-col items-center"
       >
-        {/* Characters — each reveals individually based on scroll progress */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.08em" }}>
-          {CHARS.map((char, i) => {
-            // Stagger: each char starts revealing slightly after the previous
-            const charOpacity = remap(progress, 0.36 + i * 0.009, 0.53 + i * 0.005, 0, 1);
-            const charBlur = (1 - charOpacity) * 7;
-            const charY = (1 - charOpacity) * 16;
 
-            return (
-              <span
-                key={i}
-                style={{
-                  display: "inline-block",
-                  fontSize: "clamp(2.6rem, 6.5vw, 6rem)",
-                  letterSpacing: "0.34em",
-                  fontFamily: "var(--font-inter), sans-serif",
-                  fontWeight: 300,
-                  color: "white",
-                  opacity: charOpacity,
-                  filter: `blur(${charBlur}px)`,
-                  transform: `translateY(${charY}px)`,
-                  userSelect: "none",
-                  willChange: "opacity, transform, filter",
-                }}
-              >
-                {char}
-              </span>
-            );
-          })}
+        {/* ── PITCHLENS characters ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.1em" }}>
+          {CHARS.map((char, i) => (
+            <motion.span
+              key={i}
+              className="select-none"
+              style={{
+                display    : "inline-block",
+                fontSize   : "clamp(2.6rem, 6.5vw, 6rem)",
+                letterSpacing: "0.34em",
+                fontFamily : "var(--font-inter), sans-serif",
+                fontWeight : 300,
+                color      : "white",
+                lineHeight : 1,
+              }}
+              initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
+              animate={
+                titlePhase >= 2
+                  ? { opacity: 1,    y: 0, filter: "blur(0px)" }
+                  : titlePhase >= 1
+                  ? { opacity: 0.12, y: 0, filter: "blur(4px)" }
+                  : { opacity: 0,    y: 18, filter: "blur(8px)" }
+              }
+              transition={{
+                duration: titlePhase >= 2 ? 1.0 : 0.7,
+                delay   : titlePhase >= 2 ? i * 0.07 : 0,
+                ease    : [0.16, 1, 0.3, 1],
+              }}
+            >
+              {char}
+            </motion.span>
+          ))}
         </div>
 
-        {/* Light sweep — plays once as title fully reveals */}
-        {progress >= 0.52 && progress <= 0.75 && (
-          <div
+        {/* ── Light sweep — fires once on full reveal ── */}
+        {titlePhase === 2 && (
+          <motion.div
+            className="absolute pointer-events-none"
             style={{
-              position: "absolute",
-              top: 0,
-              left: "-5%",
-              width: "110%",
+              top   : 0,
+              left  : "-10%",
+              width : "120%",
               height: "100%",
               background:
-                "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 40%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.07) 60%, transparent 100%)",
-              pointerEvents: "none",
-              // Animate via CSS animation triggered once
-              animation: "lightSweep 1.3s cubic-bezier(0.4,0,0.2,1) 0.1s forwards",
-              opacity: progress > 0.68 ? 0 : 1,
-              transition: "opacity 0.4s ease",
+                "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.06) 60%, transparent 100%)",
             }}
+            initial={{ x: "-120%" }}
+            animate={{ x: "120%" }}
+            transition={{ duration: 1.4, delay: 0.5, ease: "easeInOut" }}
           />
         )}
 
-        {/* ONE MATCH. THREE REALITIES. */}
-        <p
+        {/* ── ONE MATCH. THREE REALITIES. ── */}
+        <motion.p
+          className="text-white text-center select-none"
           style={{
-            fontSize: "clamp(0.55rem, 1vw, 0.85rem)",
+            fontSize     : "clamp(0.55rem, 1vw, 0.85rem)",
             letterSpacing: "0.44em",
-            fontWeight: 300,
-            fontFamily: "var(--font-inter), sans-serif",
+            fontWeight   : 300,
+            fontFamily   : "var(--font-inter), sans-serif",
             textTransform: "uppercase",
-            color: "white",
-            opacity: subtitleOpacity,
-            marginTop: "1rem",
-            filter: `blur(${remap(progress, 0.58, 0.68, 2, 0)}px)`,
-            userSelect: "none",
-            whiteSpace: "nowrap",
+            lineHeight   : 1.6,
+            marginTop    : "1rem",
           }}
+          animate={
+            titlePhase >= 3
+              ? { opacity: 0.72, y: 0,  filter: "blur(0px)" }
+              : titlePhase >= 2
+              ? { opacity: 0.2,  y: 4,  filter: "blur(2px)" }
+              : { opacity: 0,    y: 10, filter: "blur(4px)" }
+          }
+          transition={{ duration: 1.1, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
         >
           ONE MATCH.&nbsp;&nbsp;&nbsp;THREE REALITIES.
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
 
-      {/* ── Scroll to begin hint ── */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: "7vh",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "10px",
-          opacity: hintOpacity,
-          pointerEvents: "none",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "0.5rem",
-            letterSpacing: "0.32em",
-            color: "rgba(255,255,255,0.4)",
-            fontFamily: "var(--font-inter)",
-            fontWeight: 300,
-            textTransform: "uppercase",
-          }}
-        >
-          Scroll to begin
-        </span>
-        <div
-          style={{
-            width: "1px",
-            height: "32px",
-            background: "linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)",
-            animation: "scrollPulse 1.8s ease-in-out infinite",
-          }}
-        />
-      </div>
-
-      <style>{`
-        @keyframes lightSweep {
-          from { transform: translateX(-110%); }
-          to   { transform: translateX(110%); }
-        }
-        @keyframes scrollPulse {
-          0%, 100% { opacity: 0.4; transform: scaleY(1); }
-          50%       { opacity: 0.9; transform: scaleY(1.15); }
-        }
-      `}</style>
+      {/* ── Scroll to begin hint — only phase 0-1, gone once journey starts ── */}
+      <AnimatePresence>
+        {titlePhase <= 1 && (
+          <motion.div
+            className="absolute flex flex-col items-center gap-2 pointer-events-none"
+            style={{ bottom: "7vh" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.6 } }}
+          >
+            <span
+              style={{
+                fontSize     : "0.5rem",
+                letterSpacing: "0.3em",
+                color        : "rgba(255,255,255,0.38)",
+                fontFamily   : "var(--font-inter)",
+                fontWeight   : 300,
+                textTransform: "uppercase",
+              }}
+            >
+              Scroll to experience
+            </span>
+            <motion.div
+              style={{
+                width     : "1px",
+                height    : "30px",
+                background: "linear-gradient(to bottom, rgba(255,255,255,0.35), transparent)",
+              }}
+              animate={{ scaleY: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const VIDEOS = [
   "/videos/v1-awakening.mp4",
@@ -10,92 +10,133 @@ const VIDEOS = [
 ];
 
 /**
- * Progress segments — [start, end] — for each video.
- *
- * v3 ("same composition" — static camera) is compressed to 0.45–0.54.
- * It gets a CSS scale push (1.0→1.08) driven by local progress so
- * every scroll pixel shows visible camera movement even on a static shot.
- * Zero dead zones.
+ * How long each video plays before we force-advance, regardless of natural end.
+ * Targets ~9s total intro → portals appear.
+ *   v1: 2.8s  v2: 2.5s  v3: 2.0s  v4: loops
+ * Scrolling boosts playbackRate (up to 1.8×) so the journey is faster with interaction.
  */
-const SEGMENTS: [number, number][] = [
-  [0.00, 0.24], // v1 — stadium awakening
-  [0.24, 0.45], // v2 — aerial descent
-  [0.45, 0.54], // v3 — stillness (compressed, augmented with scale)
-  [0.54, 1.00], // v4 — the ball / portal reveal
-];
+const MAX_DURATIONS = [2.8, 2.5, 2.0, Infinity];
 
 interface Props {
-  progress: number;
   parallax: { x: number; y: number };
+  onPhaseChange: (videoIndex: number) => void;
+  onComplete: () => void;
 }
 
-function getActiveSeg(p: number): number {
-  for (let i = SEGMENTS.length - 1; i >= 0; i--) {
-    if (p >= SEGMENTS[i][0]) return i;
-  }
-  return 0;
-}
-
-function localProgress(p: number, seg: number): number {
-  const [s, e] = SEGMENTS[seg];
-  return Math.max(0, Math.min(1, (p - s) / (e - s)));
-}
-
-export default function VideoSequence({ progress, parallax }: Props) {
+export default function VideoSequence({ parallax, onPhaseChange, onComplete }: Props) {
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([null, null, null, null]);
-  const readyRef = useRef<boolean[]>([false, false, false, false]);
-  const lastTimeRef = useRef<number[]>([-1, -1, -1, -1]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [fadingIndex, setFadingIndex] = useState<number | null>(null);
 
-  // Preload all videos simultaneously on mount
+  // Refs for stable access inside event listeners (no stale closures)
+  const activeIdxRef    = useRef(0);
+  const advancingRef    = useRef(false);
+  const rateDecayRef    = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const onPhaseRef      = useRef(onPhaseChange);
+  const onCompleteRef   = useRef(onComplete);
+  useEffect(() => { onPhaseRef.current    = onPhaseChange; }, [onPhaseChange]);
+  useEffect(() => { onCompleteRef.current = onComplete;    }, [onComplete]);
+
   useEffect(() => {
-    videoRefs.current.forEach((video, i) => {
-      if (!video) return;
-      video.src = VIDEOS[i];
-      video.preload = "auto";
-      video.muted = true;
-      video.playsInline = true;
-      video.load();
-      video.addEventListener(
-        "loadedmetadata",
-        () => { readyRef.current[i] = true; },
-        { once: true }
-      );
+    // ── 1. Load all videos simultaneously ──
+    videoRefs.current.forEach((v, i) => {
+      if (!v) return;
+      v.src       = VIDEOS[i];
+      v.preload   = "auto";
+      v.muted     = true;
+      v.playsInline = true;
+      v.load();
     });
-  }, []);
 
-  // Scrub active video every time progress changes
-  useEffect(() => {
-    const seg = getActiveSeg(progress);
-    const lp = localProgress(progress, seg);
-    const video = videoRefs.current[seg];
+    // ── 2. Advance logic (closure-safe — uses local ref variables) ──
+    const advance = () => {
+      if (advancingRef.current) return;
+      const prev = activeIdxRef.current;
+      const next = prev + 1;
+      if (next >= VIDEOS.length) return;
 
-    if (!video || !readyRef.current[seg]) return;
-    const dur = video.duration;
-    if (!dur || isNaN(dur)) return;
+      advancingRef.current  = true;
+      activeIdxRef.current  = next;
 
-    // Target time, leave a hair before end to prevent looping
-    const t = Math.max(0, Math.min(dur - 0.04, lp * dur));
+      const nextVid = videoRefs.current[next];
+      if (nextVid) {
+        nextVid.currentTime = 0;
+        nextVid.play().catch(() => {});
+      }
 
-    // Only seek if the change is meaningful (>1 frame @ 30fps)
-    if (Math.abs(t - lastTimeRef.current[seg]) > 0.03) {
-      video.currentTime = t;
-      lastTimeRef.current[seg] = t;
+      setFadingIndex(prev);
+      setActiveIndex(next);
+      onPhaseRef.current(next);
+
+      // After crossfade completes: pause old video, clear fading state
+      setTimeout(() => {
+        const oldVid = videoRefs.current[prev];
+        if (oldVid) { oldVid.pause(); oldVid.currentTime = 0; }
+        setFadingIndex(null);
+        advancingRef.current = false;
+
+        // v4 started → notify parent to trigger portals
+        if (next === VIDEOS.length - 1) onCompleteRef.current();
+      }, 520);
+    };
+
+    // ── 3. Attach timeupdate + ended listeners to every video ──
+    videoRefs.current.forEach((v, i) => {
+      if (!v) return;
+
+      v.addEventListener("timeupdate", () => {
+        if (activeIdxRef.current !== i) return;
+        if (MAX_DURATIONS[i] !== Infinity && v.currentTime >= MAX_DURATIONS[i] && !advancingRef.current) {
+          advance();
+        }
+      });
+
+      v.addEventListener("ended", () => {
+        if (i === VIDEOS.length - 1) {
+          // v4 loops — keeps the ball alive during portal phase
+          v.currentTime = 0;
+          v.play().catch(() => {});
+          return;
+        }
+        if (activeIdxRef.current === i && !advancingRef.current) {
+          advance();
+        }
+      });
+    });
+
+    // ── 4. Start first video ──
+    const first = videoRefs.current[0];
+    if (first) {
+      const tryPlay = () => first.play().catch(() => {});
+      if (first.readyState >= 2) tryPlay();
+      else first.addEventListener("canplay", tryPlay, { once: true });
     }
-  }, [progress]);
+    onPhaseRef.current(0); // notify: v1 is active
 
-  const activeSeg = getActiveSeg(progress);
+    // ── 5. Scroll → playback rate boost ──
+    // User feels participation; sequence still works without any scrolling.
+    const onWheel = (e: WheelEvent) => {
+      const v = videoRefs.current[activeIdxRef.current];
+      if (!v) return;
+      const boost = Math.min(1, Math.abs(e.deltaY) / 200);
+      v.playbackRate = 1 + boost * 0.8; // up to 1.8×
+      clearTimeout(rateDecayRef.current);
+      rateDecayRef.current = setTimeout(() => {
+        const active = videoRefs.current[activeIdxRef.current];
+        if (active) active.playbackRate = 1;
+      }, 400);
+    };
+    window.addEventListener("wheel", onWheel, { passive: true });
 
-  // V3 scale: 1.00 → 1.08 over its compressed segment — creates push-in motion
-  const v3Scale = activeSeg === 2 ? 1 + localProgress(progress, 2) * 0.08 : 1;
+    return () => {
+      window.removeEventListener("wheel", onWheel);
+      clearTimeout(rateDecayRef.current);
+    };
+  }, []); // stable — all callbacks via refs
 
-  // Parallax offset — applied to all video layers
+  // Parallax transform applied to all video layers
   const px = parallax.x * -5;
   const py = parallax.y * -5;
-
-  const transform = (i: number) => {
-    const scale = i === 2 ? v3Scale : 1.025; // slight overscale hides parallax edges
-    return `translate(${px}px, ${py}px) scale(${scale})`;
-  };
 
   return (
     <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 10 }}>
@@ -107,10 +148,9 @@ export default function VideoSequence({ progress, parallax }: Props) {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            opacity: activeSeg === i ? 1 : 0,
-            transform: transform(i),
-            // CSS transition handles the crossfade at segment boundaries
-            transition: "opacity 0.45s ease",
+            opacity   : i === activeIndex ? 1 : 0,
+            transform : `translate(${px}px, ${py}px) scale(1.025)`,
+            transition: "opacity 0.52s ease",
             willChange: "transform, opacity",
           }}
         />
