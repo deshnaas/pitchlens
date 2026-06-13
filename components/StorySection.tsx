@@ -498,29 +498,138 @@ export default function StorySection({ visible, onComplete }: Props) {
           />
 
           {/* ── Content overlay — fades to new content, world stays ── */}
-          <div
-            className="absolute inset-0 flex flex-col justify-center pointer-events-none"
-            style={{
-              // Align text bottom-left except on branch nodes (centred toward that side)
-              paddingLeft : step === 3 ? "6vw" : step === 5 ? "auto" : "8vw",
-              paddingRight: step === 5 ? "6vw" : step === 3 ? "auto" : "auto",
-              paddingBottom: "12vh",
-              alignItems  : step === 3 ? "flex-start" : step === 5 ? "flex-end" : step === 4 ? "center" : "flex-start",
-            }}
-          >
+          <div className="absolute inset-0 pointer-events-none">
             <AnimatePresence mode="wait">
-              <motion.div
-                key={step}
-                initial={{ opacity: 0, y: 22, filter: "blur(8px)" }}
-                animate={{ opacity: 1, y: 0,  filter: "blur(0px)" }}
-                exit   ={{ opacity: 0, y: -16, filter: "blur(6px)" }}
-                transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-                style={{
-                  maxWidth   : "480px",
-                  textAlign  : step === 4 ? "center" : step === 5 ? "right" : "left",
-                  pointerEvents: isLastStep ? "auto" : "none",
-                }}
-              >
+
+              {/* ═══ POV BRANCH STEPS (3, 4, 5) — big spatial label treatment ═══ */}
+              {(step === 3 || step === 4 || step === 5) && (
+                <motion.div
+                  key={`pov-${step}`}
+                  className="absolute inset-0 flex flex-col"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit   ={{ opacity: 0 }}
+                  transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ pointerEvents: "none" }}
+                >
+                  {/* Giant reality label — top-left / top-centre / top-right per branch */}
+                  <div style={{
+                    position : "absolute",
+                    top      : "50%",
+                    transform: "translateY(-50%)",
+                    left     : step === 3 ? "5vw" : step === 5 ? "auto" : "50%",
+                    right    : step === 5 ? "5vw" : "auto",
+                    marginLeft: step === 4 ? "-20vw" : undefined,
+                    width    : step === 4 ? "40vw" : "auto",
+                    textAlign: step === 3 ? "left" : step === 5 ? "right" : "center",
+                  }}>
+                    {/* Accent rule */}
+                    <motion.div
+                      initial={{ scaleX: 0, opacity: 0 }}
+                      animate={{ scaleX: 1, opacity: 1 }}
+                      transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                      style={{
+                        height         : "1px",
+                        background     : accent,
+                        marginBottom   : "1.4rem",
+                        transformOrigin: step === 5 ? "right" : "left",
+                        width          : "clamp(40px, 6vw, 80px)",
+                        marginLeft     : step === 4 ? "auto" : step === 5 ? "auto" : 0,
+                        marginRight    : step === 5 ? 0 : step === 4 ? "auto" : undefined,
+                        opacity        : 0.7,
+                      }}
+                    />
+
+                    {/* THE BIG LABEL */}
+                    <motion.h1
+                      initial={{ opacity: 0, y: 30, filter: "blur(12px)" }}
+                      animate={{ opacity: 1, y: 0,  filter: "blur(0px)"  }}
+                      transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+                      style={{
+                        fontFamily   : "var(--font-inter), sans-serif",
+                        fontWeight   : 200,
+                        fontSize     : "clamp(2.8rem, 6.5vw, 6.5rem)",
+                        letterSpacing: "0.14em",
+                        textTransform: "uppercase",
+                        lineHeight   : 0.95,
+                        margin       : 0,
+                        color        : "rgba(255,255,255,0.0)",
+                        // Painted in accent with a soft glow
+                        WebkitTextStroke: `1px ${accent}`,
+                        textShadow   : `0 0 60px ${accent}, 0 0 120px ${accent.replace(/[\d.]+\)$/, "0.25)")}`,
+                      }}
+                    >
+                      {step === 3 ? "REFEREE\nPOV" : step === 4 ? "NEW\nFAN" : "TEAM\nSUPPORTER"}
+                    </motion.h1>
+
+                    {/* Sub-descriptor — appears slightly after label */}
+                    <motion.p
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0   }}
+                      transition={{ duration: 0.8, delay: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                      style={{
+                        fontFamily   : "var(--font-inter), sans-serif",
+                        fontWeight   : 300,
+                        fontSize     : "clamp(0.65rem, 0.9vw, 0.82rem)",
+                        letterSpacing: "0.06em",
+                        color        : "rgba(255,255,255,0.48)",
+                        lineHeight   : 1.65,
+                        marginTop    : "1.4rem",
+                        maxWidth     : "340px",
+                        marginLeft   : step === 4 ? "auto" : step === 5 ? "auto" : 0,
+                        marginRight  : step === 5 ? 0 : step === 4 ? "auto" : undefined,
+                      }}
+                    >
+                      {stepData.headline}
+                    </motion.p>
+
+                    {/* Quote / reaction line — the emotional beat */}
+                    <motion.p
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.9, delay: 0.7 }}
+                      style={{
+                        fontFamily   : "var(--font-inter), sans-serif",
+                        fontWeight   : 300,
+                        fontStyle    : "italic",
+                        fontSize     : "clamp(0.58rem, 0.78vw, 0.72rem)",
+                        letterSpacing: "0.03em",
+                        color        : accent,
+                        lineHeight   : 1.6,
+                        marginTop    : "0.9rem",
+                        maxWidth     : "300px",
+                        marginLeft   : step === 4 ? "auto" : step === 5 ? "auto" : 0,
+                        marginRight  : step === 5 ? 0 : step === 4 ? "auto" : undefined,
+                        opacity      : 0.65,
+                      }}
+                    >
+                      "{stepData.body}"
+                    </motion.p>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ═══ ALL OTHER STEPS — standard narrative layout ═══ */}
+              {step !== 3 && step !== 4 && step !== 5 && (
+                <motion.div
+                  key={`std-${step}`}
+                  className="absolute inset-0 flex flex-col justify-center"
+                  initial={{ opacity: 0, y: 22, filter: "blur(8px)" }}
+                  animate={{ opacity: 1, y: 0,  filter: "blur(0px)" }}
+                  exit   ={{ opacity: 0, y: -16, filter: "blur(6px)" }}
+                  transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                  style={{
+                    paddingLeft  : "8vw",
+                    paddingBottom: "12vh",
+                    alignItems   : step === 6 ? "center" : "flex-start",
+                    pointerEvents: isLastStep ? "auto" : "none",
+                  }}
+                >
+                  <div style={{
+                    maxWidth : "480px",
+                    textAlign: step === 6 ? "center" : "left",
+                    margin   : step === 6 ? "0 auto" : undefined,
+                  }}>
                 {/* Kicker */}
                 <p style={{
                   fontFamily   : "var(--font-inter), sans-serif",
@@ -558,7 +667,6 @@ export default function StorySection({ visible, onComplete }: Props) {
                     color        : "rgba(255,255,255,0.46)",
                     lineHeight   : 1.7,
                     maxWidth     : "380px",
-                    margin       : step === 4 ? "0 auto" : step === 5 ? "0 0 0 auto" : undefined,
                   }}>
                     {stepData.body}
                   </p>
@@ -591,7 +699,10 @@ export default function StorySection({ visible, onComplete }: Props) {
                     Choose your reality
                   </motion.button>
                 )}
-              </motion.div>
+                  </div>
+                </motion.div>
+              )}
+
             </AnimatePresence>
           </div>
 
