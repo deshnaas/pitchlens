@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef } from "react";
 
 const VIDEOS = [
   "/videos/v1-awakening.mp4",
@@ -10,113 +9,112 @@ const VIDEOS = [
   "/videos/v4-ball.mp4",
 ];
 
-interface VideoSequenceProps {
-  onPhaseChange: (phase: number) => void;
-  onComplete: () => void;
+/**
+ * Progress segments — [start, end] — for each video.
+ *
+ * v3 ("same composition" — static camera) is compressed to 0.45–0.54.
+ * It gets a CSS scale push (1.0→1.08) driven by local progress so
+ * every scroll pixel shows visible camera movement even on a static shot.
+ * Zero dead zones.
+ */
+const SEGMENTS: [number, number][] = [
+  [0.00, 0.24], // v1 — stadium awakening
+  [0.24, 0.45], // v2 — aerial descent
+  [0.45, 0.54], // v3 — stillness (compressed, augmented with scale)
+  [0.54, 1.00], // v4 — the ball / portal reveal
+];
+
+interface Props {
+  progress: number;
+  parallax: { x: number; y: number };
 }
 
-export default function VideoSequence({ onPhaseChange, onComplete }: VideoSequenceProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const nextVideoRef = useRef<HTMLVideoElement>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [transitioning, setTransitioning] = useState(false);
-  const [nextSrc, setNextSrc] = useState<string | null>(null);
-  const [showNext, setShowNext] = useState(false);
-  const completedRef = useRef(false);
+function getActiveSeg(p: number): number {
+  for (let i = SEGMENTS.length - 1; i >= 0; i--) {
+    if (p >= SEGMENTS[i][0]) return i;
+  }
+  return 0;
+}
 
-  // Preload all videos
+function localProgress(p: number, seg: number): number {
+  const [s, e] = SEGMENTS[seg];
+  return Math.max(0, Math.min(1, (p - s) / (e - s)));
+}
+
+export default function VideoSequence({ progress, parallax }: Props) {
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([null, null, null, null]);
+  const readyRef = useRef<boolean[]>([false, false, false, false]);
+  const lastTimeRef = useRef<number[]>([-1, -1, -1, -1]);
+
+  // Preload all videos simultaneously on mount
   useEffect(() => {
-    VIDEOS.forEach((src) => {
-      const v = document.createElement("video");
-      v.src = src;
-      v.preload = "auto";
-      v.muted = true;
+    videoRefs.current.forEach((video, i) => {
+      if (!video) return;
+      video.src = VIDEOS[i];
+      video.preload = "auto";
+      video.muted = true;
+      video.playsInline = true;
+      video.load();
+      video.addEventListener(
+        "loadedmetadata",
+        () => { readyRef.current[i] = true; },
+        { once: true }
+      );
     });
   }, []);
 
-  const advanceToNext = useCallback(() => {
-    const next = currentIndex + 1;
-
-    if (next >= VIDEOS.length) {
-      if (!completedRef.current) {
-        completedRef.current = true;
-        onComplete();
-      }
-      return;
-    }
-
-    setNextSrc(VIDEOS[next]);
-    setTransitioning(true);
-
-    setTimeout(() => {
-      setShowNext(true);
-    }, 50);
-
-    setTimeout(() => {
-      setCurrentIndex(next);
-      setShowNext(false);
-      setNextSrc(null);
-      setTransitioning(false);
-      onPhaseChange(next);
-
-      if (nextVideoRef.current) {
-        nextVideoRef.current.play().catch(() => {});
-      }
-    }, 600);
-  }, [currentIndex, onPhaseChange, onComplete]);
-
+  // Scrub active video every time progress changes
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    const seg = getActiveSeg(progress);
+    const lp = localProgress(progress, seg);
+    const video = videoRefs.current[seg];
 
-    video.src = VIDEOS[currentIndex];
-    video.load();
-    video.play().catch(() => {});
+    if (!video || !readyRef.current[seg]) return;
+    const dur = video.duration;
+    if (!dur || isNaN(dur)) return;
 
-    const handleEnded = () => {
-      if (currentIndex < VIDEOS.length - 1) {
-        advanceToNext();
-      } else {
-        if (!completedRef.current) {
-          completedRef.current = true;
-          onComplete();
-        }
-      }
-    };
+    // Target time, leave a hair before end to prevent looping
+    const t = Math.max(0, Math.min(dur - 0.04, lp * dur));
 
-    video.addEventListener("ended", handleEnded);
-    return () => video.removeEventListener("ended", handleEnded);
-  }, [currentIndex, advanceToNext, onComplete]);
+    // Only seek if the change is meaningful (>1 frame @ 30fps)
+    if (Math.abs(t - lastTimeRef.current[seg]) > 0.03) {
+      video.currentTime = t;
+      lastTimeRef.current[seg] = t;
+    }
+  }, [progress]);
+
+  const activeSeg = getActiveSeg(progress);
+
+  // V3 scale: 1.00 → 1.08 over its compressed segment — creates push-in motion
+  const v3Scale = activeSeg === 2 ? 1 + localProgress(progress, 2) * 0.08 : 1;
+
+  // Parallax offset — applied to all video layers
+  const px = parallax.x * -5;
+  const py = parallax.y * -5;
+
+  const transform = (i: number) => {
+    const scale = i === 2 ? v3Scale : 1.025; // slight overscale hides parallax edges
+    return `translate(${px}px, ${py}px) scale(${scale})`;
+  };
 
   return (
-    <div className="absolute inset-0 w-full h-full">
-      {/* Primary video */}
-      <motion.video
-        ref={videoRef}
-        className="absolute inset-0 w-full h-full object-cover"
-        muted
-        playsInline
-        animate={{ opacity: transitioning ? 0 : 1 }}
-        transition={{ duration: 0.6, ease: "easeInOut" }}
-      />
-
-      {/* Next video crossfade */}
-      <AnimatePresence>
-        {nextSrc && (
-          <motion.video
-            ref={nextVideoRef}
-            key={nextSrc}
-            src={nextSrc}
-            className="absolute inset-0 w-full h-full object-cover"
-            muted
-            playsInline
-            autoPlay
-            initial={{ opacity: 0 }}
-            animate={{ opacity: showNext ? 1 : 0 }}
-            transition={{ duration: 0.6, ease: "easeInOut" }}
-          />
-        )}
-      </AnimatePresence>
+    <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 10 }}>
+      {VIDEOS.map((_, i) => (
+        <video
+          key={i}
+          ref={(el) => { videoRefs.current[i] = el; }}
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            opacity: activeSeg === i ? 1 : 0,
+            transform: transform(i),
+            // CSS transition handles the crossfade at segment boundaries
+            transition: "opacity 0.45s ease",
+            willChange: "transform, opacity",
+          }}
+        />
+      ))}
     </div>
   );
 }

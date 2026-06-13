@@ -1,214 +1,246 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 
-interface LensPortalsProps {
-  visible: boolean;
+interface Props {
+  progress: number;
   onHoverChange: (lens: "referee" | "fan" | "supporter" | null) => void;
 }
 
-const LENSES = [
+// Smooth 0-1 clamp + remap
+function remap(p: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
+  const t = Math.max(0, Math.min(1, (p - inMin) / (inMax - inMin)));
+  const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  return outMin + e * (outMax - outMin);
+}
+
+const ZONES = [
   {
-    id: "referee" as const,
-    label: "REFEREE",
-    subtitle: "The Laws. The Logic. The Truth.",
-    color: "#a8c4e0",
-    glowColor: "rgba(168, 196, 224, 0.15)",
-    borderColor: "rgba(168, 196, 224, 0.35)",
-    route: "/referee",
-    symbol: "⚖",
-    delay: 0,
+    id:        "referee" as const,
+    label:     "REFEREE",
+    descriptor:"See every decision through the laws of the game",
+    route:     "/referee",
+    color:     [168, 196, 224] as [number, number, number],
+    // Referee: thin horizontal rule lines — like offside geometry
+    Geometry:  () => (
+      <svg width="100%" height="100%" viewBox="0 0 200 120" preserveAspectRatio="xMidYMid meet"
+        style={{ position: "absolute", inset: 0, opacity: 0.55 }}>
+        <line x1="10" y1="30"  x2="190" y2="30"  stroke="rgba(168,196,224,0.6)" strokeWidth="0.5"/>
+        <line x1="10" y1="50"  x2="190" y2="50"  stroke="rgba(168,196,224,0.4)" strokeWidth="0.5"/>
+        <line x1="10" y1="70"  x2="190" y2="70"  stroke="rgba(168,196,224,0.3)" strokeWidth="0.5"/>
+        <line x1="10" y1="90"  x2="190" y2="90"  stroke="rgba(168,196,224,0.2)" strokeWidth="0.5"/>
+        {/* VAR measurement line */}
+        <line x1="60" y1="15" x2="60" y2="105" stroke="rgba(168,196,224,0.5)" strokeWidth="0.5" strokeDasharray="3 3"/>
+        <line x1="140" y1="15" x2="140" y2="105" stroke="rgba(168,196,224,0.3)" strokeWidth="0.5" strokeDasharray="3 3"/>
+      </svg>
+    ),
   },
   {
-    id: "fan" as const,
-    label: "NEW FAN",
-    subtitle: "The Game. The Rules. The Story.",
-    color: "#7ecfa0",
-    glowColor: "rgba(126, 207, 160, 0.15)",
-    borderColor: "rgba(126, 207, 160, 0.35)",
-    route: "/fan",
-    symbol: "◎",
-    delay: 0.12,
+    id:        "fan" as const,
+    label:     "NEW FAN",
+    descriptor:"Learn the beautiful game from the first whistle",
+    route:     "/fan",
+    color:     [126, 207, 160] as [number, number, number],
+    // New Fan: concentric arc — pitch center circle
+    Geometry:  () => (
+      <svg width="100%" height="100%" viewBox="0 0 200 120" preserveAspectRatio="xMidYMid meet"
+        style={{ position: "absolute", inset: 0, opacity: 0.5 }}>
+        <circle cx="100" cy="60" r="35" fill="none" stroke="rgba(126,207,160,0.5)" strokeWidth="0.6"/>
+        <circle cx="100" cy="60" r="55" fill="none" stroke="rgba(126,207,160,0.3)" strokeWidth="0.5"/>
+        <circle cx="100" cy="60" r="72" fill="none" stroke="rgba(126,207,160,0.18)" strokeWidth="0.4"/>
+        <circle cx="100" cy="60" r="4"  fill="rgba(126,207,160,0.6)"/>
+      </svg>
+    ),
   },
   {
-    id: "supporter" as const,
-    label: "SUPPORTER",
-    subtitle: "The Emotion. The Drama. The Soul.",
-    color: "#e8a87c",
-    glowColor: "rgba(232, 168, 124, 0.15)",
-    borderColor: "rgba(232, 168, 124, 0.35)",
-    route: "/supporter",
-    symbol: "♦",
-    delay: 0.24,
+    id:        "supporter" as const,
+    label:     "SUPPORTER",
+    descriptor:"Feel the match through pure passion and emotion",
+    route:     "/supporter",
+    color:     [232, 168, 124] as [number, number, number],
+    // Supporter: diagonal energy streaks — crowd flare trails
+    Geometry:  () => (
+      <svg width="100%" height="100%" viewBox="0 0 200 120" preserveAspectRatio="xMidYMid meet"
+        style={{ position: "absolute", inset: 0, opacity: 0.5 }}>
+        <line x1="20"  y1="110" x2="90"  y2="10"  stroke="rgba(232,168,124,0.55)" strokeWidth="0.7"/>
+        <line x1="50"  y1="115" x2="110" y2="5"   stroke="rgba(232,168,124,0.35)" strokeWidth="0.5"/>
+        <line x1="90"  y1="115" x2="150" y2="5"   stroke="rgba(232,168,124,0.45)" strokeWidth="0.6"/>
+        <line x1="130" y1="115" x2="190" y2="10"  stroke="rgba(232,168,124,0.25)" strokeWidth="0.4"/>
+        <line x1="5"   y1="80"  x2="60"  y2="20"  stroke="rgba(232,168,124,0.2)"  strokeWidth="0.4"/>
+      </svg>
+    ),
   },
 ];
 
-export default function LensPortals({ visible, onHoverChange }: LensPortalsProps) {
-  const [hoveredLens, setHoveredLens] = useState<"referee" | "fan" | "supporter" | null>(null);
-  const [selectedLens, setSelectedLens] = useState<string | null>(null);
+export default function LensPortals({ progress, onHoverChange }: Props) {
+  const [hovered, setHovered] = useState<"referee" | "fan" | "supporter" | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const router = useRouter();
 
+  // Portals enter at progress 0.72 → 0.92
+  const entryProgress = remap(progress, 0.72, 0.92, 0, 1);
+  const isVisible = progress >= 0.72;
+
   const handleHover = (id: "referee" | "fan" | "supporter" | null) => {
-    setHoveredLens(id);
+    setHovered(id);
     onHoverChange(id);
   };
 
-  const handleSelect = (lens: typeof LENSES[0]) => {
-    setSelectedLens(lens.id);
-    setTimeout(() => {
-      router.push(lens.route);
-    }, 800);
+  const handleClick = (zone: typeof ZONES[0]) => {
+    setSelected(zone.id);
+    setTimeout(() => router.push(zone.route), 700);
   };
 
+  if (!isVisible) return null;
+
   return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          className="absolute inset-0 flex items-end justify-center z-50 pointer-events-none"
-          style={{ paddingBottom: "8vh" }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <div className="flex items-end justify-center gap-6 md:gap-10 pointer-events-auto w-full px-8 max-w-5xl mx-auto">
-            {LENSES.map((lens) => {
-              const isHovered = hoveredLens === lens.id;
-              const isSelected = selectedLens === lens.id;
-              const isDimmed = hoveredLens !== null && !isHovered;
+    <div
+      className="absolute inset-x-0 bottom-0 flex"
+      style={{
+        height: "48vh",
+        zIndex: 50,
+        opacity: entryProgress,
+      }}
+    >
+      {ZONES.map((zone, idx) => {
+        const isHov = hovered === zone.id;
+        const isDim = hovered !== null && !isHov;
+        const isSel = selected === zone.id;
 
-              return (
-                <motion.div
-                  key={lens.id}
-                  className="relative flex flex-col items-center select-none"
-                  style={{ flex: 1, maxWidth: "280px" }}
-                  initial={{ opacity: 0, y: 40, scale: 0.92 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{
-                    duration: 1.0,
-                    delay: lens.delay,
-                    ease: [0.16, 1, 0.3, 1],
-                  }}
-                  onMouseEnter={() => handleHover(lens.id)}
-                  onMouseLeave={() => handleHover(null)}
-                  onClick={() => handleSelect(lens)}
-                >
-                  {/* Portal container */}
-                  <motion.div
-                    className="relative w-full flex flex-col items-center"
-                    animate={{
-                      opacity: isDimmed ? 0.35 : 1,
-                      y: isHovered ? -8 : 0,
-                      scale: isSelected ? 1.08 : isHovered ? 1.03 : 1,
-                    }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                    style={{ cursor: "none" }}
-                  >
-                    {/* Glow backdrop */}
-                    <motion.div
-                      className="absolute inset-0 rounded-2xl pointer-events-none"
-                      animate={{
-                        backgroundColor: isHovered ? lens.glowColor : "transparent",
-                        boxShadow: isHovered
-                          ? `0 0 60px 20px ${lens.glowColor}, 0 0 120px 40px ${lens.glowColor}`
-                          : "none",
-                      }}
-                      transition={{ duration: 0.5, ease: "easeOut" }}
-                      style={{ filter: "blur(2px)", borderRadius: "16px" }}
-                    />
+        const [r, g, b] = zone.color;
 
-                    {/* Portal border */}
-                    <motion.div
-                      className="relative w-full rounded-2xl overflow-hidden"
-                      style={{
-                        border: `1px solid`,
-                        borderColor: isHovered ? lens.borderColor : "rgba(255,255,255,0.08)",
-                        padding: "clamp(18px, 3vw, 32px) clamp(16px, 2.5vw, 28px)",
-                        backdropFilter: "blur(1px)",
-                        transition: "border-color 0.4s ease",
-                      }}
-                    >
-                      {/* Symbol */}
-                      <motion.div
-                        className="text-center mb-4"
-                        animate={{
-                          color: isHovered ? lens.color : "rgba(255,255,255,0.25)",
-                          scale: isHovered ? 1.2 : 1,
-                        }}
-                        transition={{ duration: 0.4 }}
-                        style={{ fontSize: "clamp(1rem, 2vw, 1.5rem)" }}
-                      >
-                        {lens.symbol}
-                      </motion.div>
+        // Width flex — hovered zone expands, others compress
+        const flexGrow = isHov ? 1.5 : isDim ? 0.75 : 1;
 
-                      {/* Thin divider line that grows on hover */}
-                      <motion.div
-                        className="mx-auto mb-5"
-                        style={{ height: "1px", backgroundColor: lens.color }}
-                        animate={{ width: isHovered ? "60%" : "20%", opacity: isHovered ? 0.7 : 0.2 }}
-                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                      />
+        // Entry animation — each zone slides up with stagger
+        const entryDelay = idx * 0.08;
+        const zoneEntry = remap(progress, 0.72 + entryDelay, 0.88 + entryDelay, 0, 1);
+        const zoneY = (1 - zoneEntry) * 40;
 
-                      {/* Label */}
-                      <motion.h2
-                        className="text-center font-light"
-                        style={{
-                          fontFamily: "var(--font-inter), sans-serif",
-                          fontSize: "clamp(0.65rem, 1.2vw, 0.9rem)",
-                          letterSpacing: "0.38em",
-                          textTransform: "uppercase",
-                          lineHeight: 1,
-                          color: isHovered ? lens.color : "rgba(255,255,255,0.8)",
-                          transition: "color 0.4s ease",
-                          fontWeight: 300,
-                        }}
-                      >
-                        {lens.label}
-                      </motion.h2>
+        // Fog intensity
+        const fogOpacity = isHov ? 0.45 : isDim ? 0.04 : 0.1;
+        const fogHeight = isHov ? "100%" : "65%";
 
-                      {/* Subtitle — fades in on hover */}
-                      <motion.p
-                        className="text-center mt-3"
-                        style={{
-                          fontFamily: "var(--font-inter), sans-serif",
-                          fontSize: "clamp(0.5rem, 0.75vw, 0.65rem)",
-                          letterSpacing: "0.15em",
-                          color: "rgba(255,255,255,0.5)",
-                          lineHeight: 1.5,
-                          fontWeight: 300,
-                        }}
-                        animate={{ opacity: isHovered ? 1 : 0, y: isHovered ? 0 : 4 }}
-                        transition={{ duration: 0.35, ease: "easeOut" }}
-                      >
-                        {lens.subtitle}
-                      </motion.p>
+        // Label visual state
+        const labelOpacity = isDim ? 0.3 : 1;
+        const labelColor = isHov ? `rgb(${r},${g},${b})` : "rgba(255,255,255,0.88)";
+        const labelScale = isHov ? 1.04 : isSel ? 1.08 : 1;
 
-                      {/* Enter arrow */}
-                      <motion.div
-                        className="flex justify-center mt-4"
-                        animate={{ opacity: isHovered ? 1 : 0, y: isHovered ? 0 : 6 }}
-                        transition={{ duration: 0.35, delay: 0.05 }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "0.55rem",
-                            letterSpacing: "0.25em",
-                            color: lens.color,
-                            fontWeight: 300,
-                          }}
-                        >
-                          ENTER →
-                        </span>
-                      </motion.div>
-                    </motion.div>
-                  </motion.div>
-                </motion.div>
-              );
-            })}
+        return (
+          <div
+            key={zone.id}
+            onClick={() => handleClick(zone)}
+            onMouseEnter={() => handleHover(zone.id)}
+            onMouseLeave={() => handleHover(null)}
+            style={{
+              flex: flexGrow,
+              position: "relative",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+              cursor: "none",
+              transform: `translateY(${zoneY}px)`,
+              opacity: labelOpacity,
+              transition: "flex 0.55s cubic-bezier(0.16,1,0.3,1), opacity 0.4s ease, transform 0.5s cubic-bezier(0.16,1,0.3,1)",
+              borderLeft: idx > 0 ? "1px solid rgba(255,255,255,0.06)" : "none",
+              overflow: "hidden",
+            }}
+          >
+            {/* Atmospheric fog — rises from bottom */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: fogHeight,
+                background: `linear-gradient(to top, rgba(${r},${g},${b},${fogOpacity}) 0%, rgba(${r},${g},${b},${fogOpacity * 0.5}) 40%, transparent 100%)`,
+                transition: "height 0.6s cubic-bezier(0.16,1,0.3,1), background 0.5s ease",
+                pointerEvents: "none",
+              }}
+            />
+
+            {/* Geometric element — visible on hover */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: "18%",
+                left: "10%",
+                right: "10%",
+                height: "45%",
+                opacity: isHov ? 1 : 0,
+                transition: "opacity 0.5s ease",
+                pointerEvents: "none",
+              }}
+            >
+              <zone.Geometry />
+            </div>
+
+            {/* Content — label + descriptor */}
+            <div
+              style={{
+                position: "relative",
+                padding: "0 clamp(16px, 3vw, 32px)",
+                paddingBottom: "clamp(20px, 4vh, 40px)",
+                textAlign: "center",
+                transform: `scale(${labelScale}) translateY(${isHov ? -6 : 0}px)`,
+                transition: "transform 0.4s cubic-bezier(0.16,1,0.3,1)",
+              }}
+            >
+              {/* Thin accent line above label */}
+              <div
+                style={{
+                  width: isHov ? "50%" : "24px",
+                  height: "1px",
+                  background: `rgba(${r},${g},${b},${isHov ? 0.8 : 0.3})`,
+                  margin: "0 auto 16px",
+                  transition: "width 0.5s cubic-bezier(0.16,1,0.3,1), background 0.4s ease",
+                }}
+              />
+
+              {/* LENS NAME — large, immediately readable */}
+              <h2
+                style={{
+                  fontSize: "clamp(1rem, 2vw, 1.7rem)",
+                  letterSpacing: "0.28em",
+                  fontWeight: 300,
+                  fontFamily: "var(--font-inter), sans-serif",
+                  textTransform: "uppercase",
+                  color: labelColor,
+                  lineHeight: 1,
+                  transition: "color 0.4s ease",
+                  userSelect: "none",
+                  margin: 0,
+                }}
+              >
+                {zone.label}
+              </h2>
+
+              {/* Descriptor — always visible, explains the reality */}
+              <p
+                style={{
+                  fontSize: "clamp(0.5rem, 0.75vw, 0.65rem)",
+                  letterSpacing: "0.1em",
+                  fontWeight: 300,
+                  fontFamily: "var(--font-inter), sans-serif",
+                  color: `rgba(${r},${g},${b},${isHov ? 0.75 : 0.35})`,
+                  lineHeight: 1.5,
+                  marginTop: "10px",
+                  opacity: isHov ? 1 : 0.6,
+                  transform: `translateY(${isHov ? 0 : 4}px)`,
+                  transition: "opacity 0.4s ease, transform 0.4s ease, color 0.4s ease",
+                  userSelect: "none",
+                  maxWidth: "220px",
+                  margin: "10px auto 0",
+                }}
+              >
+                {zone.descriptor}
+              </p>
+            </div>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        );
+      })}
+    </div>
   );
 }
