@@ -44,43 +44,43 @@ interface FeaturedMatch {
 const FEATURED: FeaturedMatch[] = [
   {
     id: "japan-spain",      title: "The Goal Line Incident",
-    home: "JAPAN",          homeflag: "🇯🇵",
-    away: "SPAIN",          awayflag: "🇪🇸",
+    home: "JAPAN",          homeflag: "JPN",
+    away: "SPAIN",          awayflag: "ESP",
     energyA: "rgba(0,55,190,",   energyB: "rgba(190,18,28,",
     angle: -90, available: true,
   },
   {
     id: "germany-japan",    title: "The Giant Killer",
-    home: "GERMANY",        homeflag: "🇩🇪",
-    away: "JAPAN",          awayflag: "🇯🇵",
+    home: "GERMANY",        homeflag: "GER",
+    away: "JAPAN",          awayflag: "JPN",
     energyA: "rgba(55,55,55,",   energyB: "rgba(0,55,190,",
     angle: -30, available: false,
   },
   {
     id: "portugal-ghana",   title: "Ronaldo's Historic Night",
-    home: "PORTUGAL",       homeflag: "🇵🇹",
-    away: "GHANA",          awayflag: "🇬🇭",
+    home: "PORTUGAL",       homeflag: "POR",
+    away: "GHANA",          awayflag: "GHA",
     energyA: "rgba(175,18,18,",  energyB: "rgba(185,145,0,",
     angle: 30, available: false,
   },
   {
     id: "england-wales",    title: "The Derby",
-    home: "ENGLAND",        homeflag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
-    away: "WALES",          awayflag: "🏴󠁧󠁢󠁷󠁬󠁳󠁿",
+    home: "ENGLAND",        homeflag: "ENG",
+    away: "WALES",          awayflag: "WAL",
     energyA: "rgba(200,200,200,", energyB: "rgba(175,18,18,",
     angle: 90, available: false,
   },
   {
     id: "belgium-croatia",  title: "Group Finale Drama",
-    home: "BELGIUM",        homeflag: "🇧🇪",
-    away: "CROATIA",        awayflag: "🇭🇷",
+    home: "BELGIUM",        homeflag: "BEL",
+    away: "CROATIA",        awayflag: "CRO",
     energyA: "rgba(195,88,0,",   energyB: "rgba(170,14,35,",
     angle: 150, available: false,
   },
   {
     id: "iran-usa",         title: "The Political Match",
-    home: "IRAN",           homeflag: "🇮🇷",
-    away: "UNITED STATES",  awayflag: "🇺🇸",
+    home: "IRAN",           homeflag: "IRN",
+    away: "USA",            awayflag: "USA",
     energyA: "rgba(0,130,40,",   energyB: "rgba(0,38,175,",
     angle: 210, available: false,
   },
@@ -660,8 +660,22 @@ function MatchCard({
         }}>
 
           {/* Home */}
-          <div style={{ flex: 1, textAlign: "right" }}>
-            <div style={{ fontSize: "1.6rem", lineHeight: 1, marginBottom: 6 }}>{match.homeflag}</div>
+          <div style={{ flex: 1, textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 7 }}>
+            {/* Metallic gold country code badge */}
+            <div style={{
+              fontSize     : "1.05rem",
+              fontWeight   : 700,
+              letterSpacing: "0.08em",
+              background   : "linear-gradient(160deg, #f0d080 0%, #c8960c 35%, #f5e070 55%, #a87000 80%, #e8c840 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor : "transparent",
+              backgroundClip: "text",
+              lineHeight   : 1,
+              filter       : isHovered ? "brightness(1.15)" : "brightness(0.9)",
+              transition   : "filter 0.3s",
+            }}>
+              {match.homeflag}
+            </div>
             <div style={{
               fontSize     : "0.62rem",
               letterSpacing: "0.16em",
@@ -677,19 +691,36 @@ function MatchCard({
           {/* VS */}
           <div style={{
             flexShrink   : 0,
-            fontSize     : "0.58rem",
-            letterSpacing: "0.22em",
-            color        : `rgba(${accent},${isHovered ? "0.60" : "0.35"})`,
-            fontWeight   : 300,
-            transition   : "color 0.3s",
-            paddingBottom: 2,
+            fontSize     : "0.55rem",
+            letterSpacing: "0.24em",
+            background   : "linear-gradient(180deg, #d4a820 0%, #8a6400 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor : "transparent",
+            backgroundClip: "text",
+            fontWeight   : 600,
+            transition   : "opacity 0.3s",
+            opacity      : isHovered ? 1 : 0.7,
+            paddingBottom: 14,
           }}>
             VS
           </div>
 
           {/* Away */}
-          <div style={{ flex: 1, textAlign: "left" }}>
-            <div style={{ fontSize: "1.6rem", lineHeight: 1, marginBottom: 6 }}>{match.awayflag}</div>
+          <div style={{ flex: 1, textAlign: "left", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 7 }}>
+            <div style={{
+              fontSize     : "1.05rem",
+              fontWeight   : 700,
+              letterSpacing: "0.08em",
+              background   : "linear-gradient(160deg, #f0d080 0%, #c8960c 35%, #f5e070 55%, #a87000 80%, #e8c840 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor : "transparent",
+              backgroundClip: "text",
+              lineHeight   : 1,
+              filter       : isHovered ? "brightness(1.15)" : "brightness(0.9)",
+              transition   : "filter 0.3s",
+            }}>
+              {match.awayflag}
+            </div>
             <div style={{
               fontSize     : "0.62rem",
               letterSpacing: "0.16em",
