@@ -227,20 +227,20 @@ export default function MatchSelectionScreen({ pov, onSelect, onBack }: Props) {
                 position  : "absolute",
                 inset     : 0,
                 background: `radial-gradient(ellipse at ${
-                  50 + Math.cos(hoveredMatch.angle * Math.PI / 180) * 28
+                  50 + Math.cos(hoveredMatch.angle * Math.PI / 180) * 32
                 }% ${
-                  50 + Math.sin(hoveredMatch.angle * Math.PI / 180) * 22
-                }%, ${hoveredMatch.energyA}0.16) 0%, transparent 55%)`,
+                  50 + Math.sin(hoveredMatch.angle * Math.PI / 180) * 26
+                }%, ${hoveredMatch.energyA}0.28) 0%, transparent 58%)`,
               }} />
               {/* Team B energy — from opposite direction */}
               <div style={{
                 position  : "absolute",
                 inset     : 0,
                 background: `radial-gradient(ellipse at ${
-                  50 - Math.cos(hoveredMatch.angle * Math.PI / 180) * 28
+                  50 - Math.cos(hoveredMatch.angle * Math.PI / 180) * 32
                 }% ${
-                  50 - Math.sin(hoveredMatch.angle * Math.PI / 180) * 22
-                }%, ${hoveredMatch.energyB}0.11) 0%, transparent 50%)`,
+                  50 - Math.sin(hoveredMatch.angle * Math.PI / 180) * 26
+                }%, ${hoveredMatch.energyB}0.20) 0%, transparent 54%)`,
               }} />
             </motion.div>
           )}
@@ -595,149 +595,137 @@ function MatchCard({
       onMouseLeave={() => onHover(null)}
       onClick={onClick}
     >
-      {/* ── Card surface ── */}
-      <motion.div
-        animate={{
-          borderColor: isHovered
-            ? `rgba(${accent},0.34)`
-            : `rgba(${accent},0.09)`,
-        }}
-        transition={{ duration: 0.35 }}
-        style={{
-          position  : "relative",
-          width     : "100%",
-          height    : "100%",
-          background: isHovered
-            ? "linear-gradient(140deg, rgba(8,16,40,0.96) 0%, rgba(4,10,26,0.98) 100%)"
-            : "linear-gradient(140deg, rgba(4,10,28,0.88) 0%, rgba(2,6,18,0.92) 100%)",
-          border    : `1px solid rgba(${accent},${isHovered ? "0.34" : "0.09"})`,
-          transition: "border-color 0.35s, background 0.35s",
-          overflow  : "hidden",
-        }}
-      >
+      {/* ── Card surface — glass panel inside the world ── */}
+      <div style={{
+        position      : "relative",
+        width         : "100%",
+        height        : "100%",
+        // Glass: lets the stadium video bleed through
+        background    : isHovered
+          ? "rgba(8,14,34,0.72)"
+          : "rgba(4,8,22,0.58)",
+        backdropFilter: "blur(18px) saturate(1.4)",
+        WebkitBackdropFilter: "blur(18px) saturate(1.4)",
+        border        : `1px solid rgba(${accent},${isHovered ? "0.42" : "0.16"})`,
+        transition    : "border-color 0.35s, background 0.35s",
+        overflow      : "hidden",
+        boxShadow     : isHovered
+          ? `0 0 0 1px rgba(${accent},0.08) inset, 0 28px 56px rgba(0,0,12,0.55)`
+          : `0 0 0 1px rgba(${accent},0.04) inset, 0 12px 32px rgba(0,0,12,0.40)`,
+      }}>
 
-        {/* Match-specific energy wash — always present, amplified on hover */}
+        {/* Match energy wash — vivid diagonal gradient, always visible */}
         <div style={{
           position  : "absolute",
           inset     : 0,
-          background: `linear-gradient(140deg, ${match.energyA}${isHovered ? "0.10)" : "0.04)"} 0%, ${match.energyB}${isHovered ? "0.07)" : "0.02)"} 100%)`,
-          transition: "background 0.4s",
+          background: `linear-gradient(135deg, ${match.energyA}${isHovered ? "0.22)" : "0.12)"} 0%, transparent 45%, ${match.energyB}${isHovered ? "0.16)" : "0.08)"} 100%)`,
+          transition: "background 0.45s",
           pointerEvents: "none",
         }} />
 
-        {/* Top edge accent line — active on hover */}
-        <motion.div
-          animate={{ opacity: isHovered ? 1 : 0 }}
-          transition={{ duration: 0.35 }}
-          style={{
-            position  : "absolute",
-            top       : 0,
-            left      : "12%",
-            right     : "12%",
-            height    : "1px",
-            background: `linear-gradient(90deg, transparent, rgba(${accent},0.65), transparent)`,
-            pointerEvents: "none",
-          }}
-        />
+        {/* Top edge accent line */}
+        <div style={{
+          position  : "absolute",
+          top       : 0, left: "8%", right: "8%",
+          height    : "1px",
+          background: `linear-gradient(90deg, transparent, rgba(${accent},${isHovered ? "0.80" : "0.28"}), transparent)`,
+          transition: "background 0.35s",
+          pointerEvents: "none",
+        }} />
 
         {/* Title */}
         <div style={{
-          padding     : "13px 15px 0",
-          fontSize    : "0.52rem",
-          letterSpacing: "0.26em",
-          color       : `rgba(${accent},${isHovered ? "0.55" : "0.26"})`,
+          padding      : "12px 14px 0",
+          fontSize     : "0.54rem",
+          letterSpacing: "0.28em",
+          color        : `rgba(255,255,255,${isHovered ? "0.72" : "0.45"})`,
           textTransform: "uppercase",
-          fontWeight  : 300,
-          transition  : "color 0.3s",
-          whiteSpace  : "nowrap",
-          overflow    : "hidden",
-          textOverflow: "ellipsis",
+          fontWeight   : 400,
+          transition   : "color 0.3s",
+          whiteSpace   : "nowrap",
+          overflow     : "hidden",
+          textOverflow : "ellipsis",
         }}>
           {match.title}
         </div>
 
-        {/* Main matchup block */}
+        {/* Main matchup */}
         <div style={{
           display       : "flex",
           alignItems    : "center",
           justifyContent: "center",
-          gap           : "14px",
-          height        : "calc(100% - 52px)",
-          padding       : "0 14px",
+          gap           : "10px",
+          height        : "calc(100% - 50px)",
+          padding       : "0 12px",
         }}>
 
-          {/* Home team */}
+          {/* Home */}
           <div style={{ flex: 1, textAlign: "right" }}>
-            <div style={{ fontSize: "1.55rem", lineHeight: 1 }}>{match.homeflag}</div>
+            <div style={{ fontSize: "1.6rem", lineHeight: 1, marginBottom: 6 }}>{match.homeflag}</div>
             <div style={{
-              fontSize    : "0.57rem",
-              letterSpacing: "0.15em",
-              color       : `rgba(${accent},${isHovered ? "0.82" : "0.48"})`,
+              fontSize     : "0.62rem",
+              letterSpacing: "0.16em",
+              color        : `rgba(255,255,255,${isHovered ? "0.92" : "0.72"})`,
               textTransform: "uppercase",
-              fontWeight  : 300,
-              marginTop   : 5,
-              transition  : "color 0.3s",
+              fontWeight   : 500,
+              transition   : "color 0.3s",
             }}>
-              {match.home.length > 8 ? match.home.slice(0, 7) + "." : match.home}
+              {match.home.length > 9 ? match.home.slice(0, 8) + "." : match.home}
             </div>
           </div>
 
-          {/* VS divider */}
-          <div style={{ flexShrink: 0, textAlign: "center" }}>
-            <div style={{
-              fontSize    : "0.60rem",
-              letterSpacing: "0.20em",
-              color       : `rgba(${accent},${isHovered ? "0.38" : "0.16"})`,
-              fontWeight  : 200,
-              transition  : "color 0.3s",
-            }}>
-              VS
-            </div>
+          {/* VS */}
+          <div style={{
+            flexShrink   : 0,
+            fontSize     : "0.58rem",
+            letterSpacing: "0.22em",
+            color        : `rgba(${accent},${isHovered ? "0.60" : "0.35"})`,
+            fontWeight   : 300,
+            transition   : "color 0.3s",
+            paddingBottom: 2,
+          }}>
+            VS
           </div>
 
-          {/* Away team */}
+          {/* Away */}
           <div style={{ flex: 1, textAlign: "left" }}>
-            <div style={{ fontSize: "1.55rem", lineHeight: 1 }}>{match.awayflag}</div>
+            <div style={{ fontSize: "1.6rem", lineHeight: 1, marginBottom: 6 }}>{match.awayflag}</div>
             <div style={{
-              fontSize    : "0.57rem",
-              letterSpacing: "0.15em",
-              color       : `rgba(${accent},${isHovered ? "0.82" : "0.48"})`,
+              fontSize     : "0.62rem",
+              letterSpacing: "0.16em",
+              color        : `rgba(255,255,255,${isHovered ? "0.92" : "0.72"})`,
               textTransform: "uppercase",
-              fontWeight  : 300,
-              marginTop   : 5,
-              transition  : "color 0.3s",
+              fontWeight   : 500,
+              transition   : "color 0.3s",
             }}>
-              {match.away.length > 8 ? match.away.slice(0, 7) + "." : match.away}
+              {match.away.length > 9 ? match.away.slice(0, 8) + "." : match.away}
             </div>
           </div>
 
         </div>
 
-        {/* Bottom status tag */}
-        <motion.div
-          animate={{ opacity: isHovered ? 1 : 0.55 }}
-          transition={{ duration: 0.3 }}
-          style={{
-            position    : "absolute",
-            bottom      : 10,
-            left        : "50%",
-            transform   : "translateX(-50%)",
-            fontSize    : "0.48rem",
-            letterSpacing: "0.26em",
-            textTransform: "uppercase",
-            color       : match.available
-              ? `rgba(${accent},0.60)`
-              : "rgba(255,255,255,0.14)",
-            whiteSpace  : "nowrap",
-            pointerEvents: "none",
-          }}
-        >
+        {/* Bottom status */}
+        <div style={{
+          position     : "absolute",
+          bottom       : 10,
+          left         : "50%",
+          transform    : "translateX(-50%)",
+          fontSize     : "0.48rem",
+          letterSpacing: "0.28em",
+          textTransform: "uppercase",
+          color        : match.available
+            ? `rgba(${accent},${isHovered ? "0.90" : "0.55"})`
+            : `rgba(255,255,255,${isHovered ? "0.26" : "0.18"})`,
+          whiteSpace   : "nowrap",
+          transition   : "color 0.3s",
+          pointerEvents: "none",
+        }}>
           {match.available
             ? (isHovered ? "▶  Enter Investigation" : "Available")
             : "Coming Soon"}
-        </motion.div>
+        </div>
 
-        {/* Hover depth glow — card lifts into light */}
+        {/* Hover outer glow — card pulls toward viewer */}
         <AnimatePresence>
           {isHovered && (
             <motion.div
@@ -747,22 +735,22 @@ function MatchCard({
               transition={{ duration: 0.35 }}
               style={{
                 position    : "absolute",
-                inset       : "-28px",
-                borderRadius: "2px",
-                boxShadow   : `0 24px 64px rgba(${accent},0.10), 0 6px 20px rgba(${accent},0.07)`,
+                inset       : "-2px",
                 pointerEvents: "none",
+                boxShadow   : `0 0 32px rgba(${accent},0.18), 0 0 80px rgba(${accent},0.08)`,
+                borderRadius: "1px",
               }}
             />
           )}
         </AnimatePresence>
 
-        {/* Portal flash — fires on selection */}
+        {/* Portal flash on click */}
         <AnimatePresence>
           {isSelected && (
             <motion.div
               initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 0.18, 0] }}
-              transition={{ duration: 0.6 }}
+              animate={{ opacity: [0, 0.22, 0] }}
+              transition={{ duration: 0.7 }}
               style={{
                 position    : "absolute",
                 inset       : 0,
@@ -773,7 +761,7 @@ function MatchCard({
           )}
         </AnimatePresence>
 
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
