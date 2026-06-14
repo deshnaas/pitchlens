@@ -11,11 +11,11 @@ const VIDEOS = [
 
 /**
  * How long each video plays before we force-advance, regardless of natural end.
- * Targets ~9s total intro → portals appear.
- *   v1: 2.8s  v2: 2.5s  v3: 2.0s  v4: loops
+ * Targets ~10s total intro → portals appear.
+ *   v1: 4.5s  v2: 2.8s  v3: 2.2s  v4: loops
  * Scrolling boosts playbackRate (up to 1.8×) so the journey is faster with interaction.
  */
-const MAX_DURATIONS = [2.8, 2.5, 2.0, Infinity];
+const MAX_DURATIONS = [4.5, 2.8, 2.2, Infinity];
 
 interface Props {
   parallax: { x: number; y: number };
@@ -77,7 +77,7 @@ export default function VideoSequence({ parallax, onPhaseChange, onComplete }: P
 
         // v4 started → notify parent to trigger portals
         if (next === VIDEOS.length - 1) onCompleteRef.current();
-      }, 520);
+      }, 1100);
     };
 
     // ── 3. Attach timeupdate + ended listeners to every video ──
@@ -150,7 +150,7 @@ export default function VideoSequence({ parallax, onPhaseChange, onComplete }: P
           style={{
             opacity   : i === activeIndex ? 1 : 0,
             transform : `translate(${px}px, ${py}px) scale(1.025)`,
-            transition: "opacity 0.52s ease",
+            transition: "opacity 1.05s cubic-bezier(0.4, 0, 0.2, 1), transform 0.12s linear",
             willChange: "transform, opacity",
           }}
         />
