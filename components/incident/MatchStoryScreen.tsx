@@ -654,7 +654,7 @@ function FrameScene({
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
         />
         <text x="52.5" y="34" textAnchor="middle" dominantBaseline="middle"
-          fill="rgba(255,255,255,0.1)" fontSize="2.8"
+          fill="rgba(255,255,255,0.1)" fontSize="3.6"
           fontFamily="'Barlow Condensed',sans-serif" letterSpacing="0.24em">
           SELECT AN EVENT
         </text>
@@ -688,7 +688,7 @@ function FrameScene({
                 y={zone.labelY ?? zone.y + 5}
                 textAnchor="middle"
                 fill={zone.color} fillOpacity={0.6}
-                fontSize="2.7" fontWeight="800"
+                fontSize="3.4" fontWeight="800"
                 {...FS} letterSpacing="0.18em">
                 {zone.label}
               </text>
@@ -706,7 +706,7 @@ function FrameScene({
         const hl      = curr?.highlight ?? false;
         const label   = curr?.label ?? base.label;
         const color   = curr?.color ?? base.color;
-        const r       = hl ? 3.2 : 2.4;
+        const r       = hl ? 4.4 : 3.2;
 
         return (
           <g key={base.id}>
@@ -716,10 +716,10 @@ function FrameScene({
                 animate={{ cx: tCx, cy: tCy, opacity: visible ? 1 : 0 }}
                 initial={{ cx: base.cx, cy: base.cy, opacity: 0 }}
                 transition={{ cx: MOVE_T, cy: MOVE_T, opacity: OPAC_T }}
-                r="6.5"
+                r="8.5"
                 fill={`${color}18`}
                 stroke={color}
-                strokeWidth="0.45"
+                strokeWidth="0.6"
               />
             )}
             {/* Outer fill circle */}
@@ -730,7 +730,7 @@ function FrameScene({
               r={r}
               fill={`${color}45`}
               stroke={color}
-              strokeWidth="0.55"
+              strokeWidth="0.75"
             />
             {/* Inner dot */}
             <motion.circle
@@ -748,7 +748,7 @@ function FrameScene({
                 transition={{ x: MOVE_T, y: MOVE_T, opacity: OPAC_T }}
                 textAnchor="middle"
                 fill="rgba(255,255,255,0.9)"
-                fontSize={hl ? "2.8" : "2.1"}
+                fontSize={hl ? "3.6" : "2.7"}
                 fontWeight={hl ? "800" : "600"}
                 {...FS}>
                 {label}
@@ -773,7 +773,7 @@ function FrameScene({
               d={d}
               fill="none"
               stroke={arrow.color}
-              strokeWidth={isShot ? 0.8 : isRun ? 0.65 : 0.5}
+              strokeWidth={isShot ? 1.2 : isRun ? 0.9 : 0.7}
               strokeDasharray={isPress ? "1.5 1" : isRun ? undefined : "2 1.2"}
               strokeLinecap="round"
               initial={{ pathLength: 0, opacity: 0 }}
@@ -791,7 +791,7 @@ function FrameScene({
       {/* LABELS — fade in/out per frame */}
       <AnimatePresence mode="sync">
         {frame.labels.map(lbl => {
-          const fs  = lbl.size === "lg" ? 14 : lbl.size === "md" ? 5 : 2.5;
+          const fs  = lbl.size === "lg" ? 17 : lbl.size === "md" ? 6.5 : 3.2;
           const fw  = lbl.size === "lg" ? "900" : "700";
           const col = lbl.color ?? "rgba(255,255,255,0.6)";
           const ls  = lbl.size === "sm" ? "0.14em" : lbl.size === "lg" ? "0em" : "0.07em";
@@ -839,9 +839,9 @@ function FrameControls({
 
   return (
     <div style={{
-      height: 56, flexShrink: 0,
+      height: 38, flexShrink: 0,
       display: "flex", alignItems: "center",
-      padding: "0 18px", gap: 14,
+      padding: "0 14px", gap: 12,
       borderTop: "1px solid rgba(255,255,255,0.052)",
       background: "rgba(5,8,16,1)",
     }}>
@@ -933,8 +933,8 @@ function ReconBoard({
     <>
       {/* Hairline team bar — 26px, purely directional */}
       <div style={{
-        height: 26, display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "0 18px", flexShrink: 0,
+        height: 18, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 14px", flexShrink: 0,
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}>
         <span style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.22em", color: hc, opacity: 0.55 }}>
@@ -955,14 +955,14 @@ function ReconBoard({
             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
             style={{
-              height: 58, flexShrink: 0, display: "flex", flexDirection: "column",
-              justifyContent: "center", padding: "0 18px",
+              height: 40, flexShrink: 0, display: "flex", flexDirection: "column",
+              justifyContent: "center", padding: "0 14px",
               borderBottom: "1px solid rgba(255,255,255,0.04)",
               background: `linear-gradient(180deg, ${activeEvent.color}08 0%, transparent 100%)`,
             }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{
-                fontSize: "2rem", fontWeight: 900, color: activeEvent.color,
+                fontSize: "1.4rem", fontWeight: 900, color: activeEvent.color,
                 lineHeight: 1, letterSpacing: "-0.02em", flexShrink: 0,
               }}>
                 {activeEvent.minute}′
@@ -1000,8 +1000,8 @@ function ReconBoard({
         )}
       </AnimatePresence>
 
-      {/* Pitch — absolute fill, zero padding */}
-      <div style={{ flex: 1, padding: "6px 8px", overflow: "hidden" }}>
+      {/* Pitch — fills all remaining space, no padding waste */}
+      <div style={{ flex: 1, padding: "2px 4px", overflow: "hidden" }}>
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg viewBox="-5 -4 117 76" preserveAspectRatio="xMidYMid meet"
             style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}>
@@ -1064,7 +1064,7 @@ function EventsPanel({
 
   return (
     <div style={{
-      width: 220, flexShrink: 0, display: "flex", flexDirection: "column",
+      width: 170, flexShrink: 0, display: "flex", flexDirection: "column",
       borderRight: "1px solid rgba(255,255,255,0.052)",
     }}>
       {/* Library header */}
@@ -1240,7 +1240,7 @@ function GranitePanel({
 
   return (
     <div style={{
-      width: 360, flexShrink: 0, display: "flex", flexDirection: "column",
+      width: 300, flexShrink: 0, display: "flex", flexDirection: "column",
       borderLeft: "1px solid rgba(255,255,255,0.052)",
       overflow: "hidden",
     }}>
@@ -1326,7 +1326,7 @@ function PlayerPanel({
 
   return (
     <div style={{
-      width: 210, flexShrink: 0, display: "flex", flexDirection: "column",
+      width: 180, flexShrink: 0, display: "flex", flexDirection: "column",
       borderLeft: "1px solid rgba(255,255,255,0.052)",
       overflowY: "auto", scrollbarWidth: "none",
     }}>
