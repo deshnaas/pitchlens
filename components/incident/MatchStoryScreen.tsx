@@ -277,385 +277,306 @@ function PitchMarkings() {
 }
 
 // ─── Investigation scenes ──────────────────────────────────────────────────────
-// Each scene focuses entirely on one incident. No other markers are shown.
-// Zone highlights are honest football zones — not fabricated tracking coordinates.
-// Player markers represent the player(s) named in the JSON event, placed in the
-// correct zone for that event type (penalty area for goals, distributed for fouls).
+// VAR replay board aesthetic.
+// Text overlays dominate the pitch — large incident title, player name, zone
+// label, and a bottom chyron. Zone highlight is the backdrop. No player dots.
 
-// Shared label style helpers
-const SL = { fontFamily: "'Barlow Condensed',sans-serif", letterSpacing: "0.15em" } as const;
-const SF = { transformBox: "fill-box" as const, transformOrigin: "center" as const };
+// Framer Motion stagger variants — parent orchestrates, children stagger in order
+const sceneV = {
+  hidden: {},
+  show:   { transition: { staggerChildren: 0.08 } },
+  exit:   { opacity: 0, transition: { duration: 0.2 } },
+} as const;
+const bgV = {   // zone fills — appear first
+  hidden: { opacity: 0 },
+  show:   { opacity: 1, transition: { duration: 0.45 } },
+  exit:   { opacity: 0 },
+} as const;
+const pathV = { // animated lines
+  hidden: { pathLength: 0, opacity: 0 },
+  show:   {
+    pathLength: 1, opacity: 1,
+    transition: {
+      pathLength: { duration: 0.72, ease: "easeOut" as const },
+      opacity:    { duration: 0.12 },
+    },
+  },
+  exit: { opacity: 0 },
+} as const;
+const txtV = {  // text — slides up and fades in
+  hidden: { opacity: 0, y: 8 },
+  show:   { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as [number,number,number,number] } },
+  exit:   { opacity: 0 },
+} as const;
+const txtDimV = { // secondary / chyron text
+  hidden: { opacity: 0 },
+  show:   { opacity: 1, transition: { duration: 0.45 } },
+  exit:   { opacity: 0 },
+} as const;
 
+const SL = { fontFamily: "'Barlow Condensed',sans-serif" } as const;
+
+// ── GOAL — text on the non-attacking half; shot path + goal flash on attacking side
 function GoalScene({ ev, meta }: { ev: PitchEvent; meta: MatchMeta }) {
   const isHome = ev.team === meta.home.name;
-  const tc = ev.color;
+  const tc    = ev.color;
   const atkX  = isHome ? 70 : 0;
   const penX  = isHome ? 88.5 : 0;
-  const goalCX = isHome ? 104.2 : 0.8;
-  // Shot arc: from ev.x/ev.y (penalty area zone) curving toward goal mouth
-  const cpX = isHome ? ev.x + 10 : ev.x - 10;
-  const cpY = ev.y + (ev.y < 34 ? 4 : -4);
-  const endY = 30 + (ev.y - 34) * 0.18 + 34 - 30; // slight vertical drift
-  const shotPath = `M ${ev.x} ${ev.y} Q ${cpX} ${cpY} ${goalCX} ${endY}`;
-  const labelSide = isHome ? 87.5 : 17.5;
-  const penLabel  = isHome ? 97 : 8;
-  const nameAbove = ev.y > 44;
+  const goalX = isHome ? 103.5 : -2.2;
+  const goalCX = isHome ? 104.4 : 0.6;
+  const cpX   = isHome ? ev.x + 11 : ev.x - 11;
+  const endY  = 32 + (ev.y - 34) * 0.1;
+  const shot  = `M ${ev.x} ${ev.y} Q ${cpX} ${ev.y - 3} ${goalCX} ${endY}`;
+  // Text sits on the NON-attacking half so it doesn't fight the visuals
+  const txtX  = isHome ? 26 : 79;
+  const teamName = (isHome ? meta.home.name : meta.away.name).toUpperCase();
 
   return (
     <g>
-      {/* Dim the non-attacking half */}
+      {/* 1 — dim non-attacking half */}
       <motion.rect x={isHome ? 0 : 35} y="0" width="70" height="68"
-        fill="rgba(0,0,0,0.38)" pointerEvents="none"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.55 }}
-      />
-      {/* Attacking third glow */}
+        fill="rgba(0,0,0,0.44)" variants={bgV} />
+      {/* 2 — attacking third glow */}
       <motion.rect x={atkX} y="0" width="35" height="68"
-        fill={`${tc}12`} pointerEvents="none"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.05 }}
-      />
-      {/* Penalty area pulse border */}
+        fill={`${tc}16`} variants={bgV} />
+      {/* 3 — penalty area border */}
       <motion.rect x={penX} y="13.84" width="16.5" height="40.32" rx="0.3"
-        fill={`${tc}20`} stroke={tc} strokeWidth="0.55" strokeDasharray="2.2 0.9"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.15 }}
-      />
-
-      {/* Shot path — animated draw */}
-      <motion.path d={shotPath}
-        fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth="0.6"
-        strokeDasharray="1.8 1.1" strokeLinecap="round"
-        initial={{ pathLength: 0, opacity: 0 }}
-        animate={{ pathLength: 1, opacity: 1 }}
-        transition={{
-          pathLength: { duration: 0.65, delay: 0.42, ease: "easeOut" },
-          opacity:    { duration: 0.18, delay: 0.42 },
-        }}
-      />
-      {/* Arrowhead at goal end */}
-      <motion.circle cx={goalCX} cy={endY} r="0.9" fill="white"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        transition={{ delay: 1.0, duration: 0.22 }}
-      />
-
-      {/* Scorer position — outer glow ring */}
-      <motion.circle cx={ev.x} cy={ev.y} r="6.5"
-        fill={`${tc}1a`} stroke={`${tc}50`} strokeWidth="0.4"
-        style={SF}
-        initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.18, type: "spring", stiffness: 160, damping: 14 }}
-      />
-      {/* Scorer dot */}
-      <motion.circle cx={ev.x} cy={ev.y} r="2.4"
-        fill={tc} stroke="rgba(255,255,255,0.88)" strokeWidth="0.5"
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.26, type: "spring", stiffness: 260, damping: 18 }}
-      />
-      {/* Pulse ring */}
-      <motion.circle cx={ev.x} cy={ev.y} r="6.5"
-        fill="none" stroke={tc} strokeWidth="0.4"
-        animate={{ r: [6.5, 11, 6.5], opacity: [0.6, 0, 0.6] }}
-        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 0.9 }}
-      />
-
-      {/* Player name */}
-      <motion.text x={ev.x} y={nameAbove ? ev.y - 9.5 : ev.y + 11.5}
-        textAnchor="middle" fill="rgba(255,255,255,0.92)"
-        fontSize="3.6" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
-        {ev.player}
-      </motion.text>
-      <motion.text x={ev.x} y={nameAbove ? ev.y - 5.5 : ev.y + 15.5}
-        textAnchor="middle" fill={`${tc}80`} fontSize="2.2" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.52 }}>
-        SHOT ZONE
-      </motion.text>
-
-      {/* Goal mouth glow */}
-      <motion.rect x={isHome ? 103.5 : -2.2} y="29.6" width="2.5" height="8.8" rx="0.2"
-        fill={`${tc}75`}
-        initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }}
-        style={{ transformOrigin: `${isHome ? 104.7 : -0.9}px 34px` }}
-        transition={{ duration: 0.38, delay: 1.0, ease: [0.16, 1, 0.3, 1] }}
-      />
-      {/* Goal flash */}
-      <motion.rect x={isHome ? 103.5 : -2.2} y="29.6" width="2.5" height="8.8" rx="0.2"
+        fill={`${tc}22`} stroke={tc} strokeWidth="0.55" strokeDasharray="2.2 0.9"
+        variants={bgV} />
+      {/* 4 — shot path draws */}
+      <motion.path d={shot}
+        fill="none" stroke="rgba(255,255,255,0.62)" strokeWidth="0.7"
+        strokeDasharray="2 1.2" strokeLinecap="round"
+        variants={pathV} />
+      {/* 5 — ball at shot origin */}
+      <motion.circle cx={ev.x} cy={ev.y} r="1.2" fill="white" opacity="0.55"
+        variants={bgV} />
+      {/* 6 — goal net glow */}
+      <motion.rect x={goalX} y="29.6" width="2.5" height="8.8" rx="0.2"
+        fill={`${tc}88`} variants={bgV} />
+      {/* 7 — flash burst */}
+      <motion.rect x={goalX} y="29.6" width="2.5" height="8.8" rx="0.2"
         fill="white"
-        animate={{ opacity: [0, 0.55, 0] }}
-        transition={{ duration: 0.45, delay: 1.05 }}
-      />
+        variants={{ hidden: { opacity: 0 }, show: { opacity: [0, 0.5, 0], transition: { duration: 0.4 } }, exit: { opacity: 0 } }} />
 
-      {/* Zone labels */}
-      <motion.text x={labelSide} y="8" textAnchor="middle"
-        fill={`${tc}70`} fontSize="4" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
-        ATTACKING THIRD
-      </motion.text>
-      <motion.text x={penLabel} y="11.5" textAnchor="middle"
-        fill={`${tc}55`} fontSize="2.5" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.72 }}>
-        PENALTY AREA
-      </motion.text>
-      <motion.text x={goalCX + (isHome ? -5 : 5)} y="25"
-        textAnchor="middle" fill={`${tc}55`} fontSize="2.2" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}>
+      {/* ── TEXT OVERLAY (VAR board) ── */}
+      {/* 8 — "GOAL" headline */}
+      <motion.text x={txtX} y="25" textAnchor="middle"
+        fill={tc} fontSize="15" fontWeight="900" {...SL} filter="url(#glow)"
+        variants={txtV}>
         GOAL
       </motion.text>
+      {/* 9 — player name */}
+      <motion.text x={txtX} y="36" textAnchor="middle"
+        fill="rgba(255,255,255,0.92)" fontSize="6" fontWeight="800" {...SL}
+        variants={txtV}>
+        {ev.player}
+      </motion.text>
+      {/* 10 — key moment title */}
+      {ev.keyMoment && (
+        <motion.text x={txtX} y="43.5" textAnchor="middle"
+          fill="rgba(255,255,255,0.48)" fontSize="3" {...SL} letterSpacing="0.06em"
+          variants={txtDimV}>
+          {ev.keyMoment.title}
+        </motion.text>
+      )}
+      {/* 11 — chyron: zone + consequence */}
+      <motion.text x={isHome ? 87.5 : 17.5} y="8.5" textAnchor="middle"
+        fill={`${tc}72`} fontSize="3.4" fontWeight="800" {...SL} letterSpacing="0.18em"
+        variants={txtDimV}>
+        ATTACKING THIRD
+      </motion.text>
+      <motion.text x={isHome ? 97 : 8} y="12" textAnchor="middle"
+        fill={`${tc}55`} fontSize="2.3" {...SL} letterSpacing="0.12em"
+        variants={txtDimV}>
+        PENALTY AREA
+      </motion.text>
+      <motion.text x={txtX} y="62.5" textAnchor="middle"
+        fill="rgba(255,255,255,0.22)" fontSize="2.5" {...SL} letterSpacing="0.14em"
+        variants={txtDimV}>
+        {teamName} TAKE THE LEAD
+      </motion.text>
+      <motion.text x={txtX} y="66.5" textAnchor="middle"
+        fill={`${tc}40`} fontSize="2" {...SL} letterSpacing="0.12em"
+        variants={txtDimV}>
+        SHOT PATH · {ev.minute}′
+      </motion.text>
     </g>
   );
 }
 
+// ── FOUL — centered VAR board with zone highlight behind
 function FoulScene({ ev, meta }: { ev: PitchEvent; meta: MatchMeta }) {
   const isHome = ev.team === meta.home.name;
-  const tc  = ev.color;
-  const opp = isHome ? meta.away.color : meta.home.color;
+  const tc    = ev.color;
   const zone  = ev.x < 35 ? "DEFENSIVE THIRD" : ev.x > 70 ? "ATTACKING THIRD" : "MIDFIELD";
   const zoneX = ev.x < 35 ? 0 : ev.x > 70 ? 70 : 35;
-  // Victim is the opposing player — offset slightly so two figures are distinct
-  const vx = Math.min(102, Math.max(3, ev.x + (ev.x < 52 ? 5 : -5)));
-  const vy = Math.min(65,  Math.max(3, ev.y + (ev.y < 34 ? 2 : -2)));
-  const nameSide = ev.y > 40;
+  const oppColor = isHome ? meta.away.color : meta.home.color;
 
   return (
     <g>
-      {/* Zone band */}
+      {/* 1 — zone highlight */}
       <motion.rect x={zoneX} y="0" width="35" height="68"
-        fill={`${tc}0c`}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}
-      />
+        fill={`${tc}0e`} variants={bgV} />
+      {/* 2 — contact circle */}
+      <motion.circle cx={ev.x} cy={ev.y} r="9"
+        fill={`${tc}12`} stroke={tc} strokeWidth="0.45" strokeDasharray="2 1"
+        variants={bgV} />
+      {/* 3 — opposing player silhouette (offset, nameless — data has no victim) */}
+      <motion.circle cx={Math.min(101, ev.x + 5.5)} cy={Math.max(3, Math.min(65, ev.y - 2))} r="2.8"
+        fill={`${oppColor}35`} stroke={`${oppColor}88`} strokeWidth="0.45"
+        variants={bgV} />
 
-      {/* Contact radius — the incident zone */}
-      <motion.circle cx={ev.x} cy={ev.y} r="11"
-        fill={`${tc}10`} stroke={tc} strokeWidth="0.45" strokeDasharray="2 1.1"
-        style={SF}
-        initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      />
-
-      {/* Victim (opponent) */}
-      <motion.circle cx={vx} cy={vy} r="4"
-        fill={`${opp}28`} stroke={opp} strokeWidth="0.55"
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.18, type: "spring", stiffness: 200, damping: 16 }}
-      />
-      <motion.circle cx={vx} cy={vy} r="1.5" fill={opp}
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.26, type: "spring", stiffness: 260 }}
-      />
-      <motion.text x={vx} y={nameSide ? vy - 7 : vy + 8.5}
-        textAnchor="middle" fill={`${opp}aa`} fontSize="2.4" fontWeight="700" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
-        OPPONENT
+      {/* ── TEXT OVERLAY ── */}
+      {/* 4 — event label */}
+      <motion.text x="52.5" y="11" textAnchor="middle"
+        fill={`${tc}88`} fontSize="3.5" fontWeight="800" {...SL} letterSpacing="0.22em"
+        variants={txtDimV}>
+        FOUL INCIDENT
       </motion.text>
-
-      {/* Fouler */}
-      <motion.circle cx={ev.x} cy={ev.y} r="4"
-        fill={`${tc}28`} stroke={tc} strokeWidth="0.55"
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.3, type: "spring", stiffness: 200, damping: 16 }}
-      />
-      <motion.circle cx={ev.x} cy={ev.y} r="1.5" fill={tc}
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.38, type: "spring", stiffness: 260 }}
-      />
-      <motion.text x={ev.x} y={nameSide ? ev.y + 8.5 : ev.y - 7}
-        textAnchor="middle" fill="rgba(255,255,255,0.9)"
-        fontSize="2.9" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
+      {/* 5 — player name (large) */}
+      <motion.text x="52.5" y="24" textAnchor="middle"
+        fill="rgba(255,255,255,0.92)" fontSize="8" fontWeight="900" {...SL}
+        variants={txtV}>
         {ev.player}
       </motion.text>
-
-      {/* Foul mark at contact point */}
-      <motion.text x={(ev.x + vx) / 2} y={(ev.y + vy) / 2 + 1}
-        textAnchor="middle" dominantBaseline="middle"
-        fill="rgba(255,80,80,0.85)" fontSize="4.5" fontWeight="900"
-        initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }}
-        style={SF}
-        transition={{ delay: 0.46, type: "spring", stiffness: 300, damping: 16 }}>
-        ✕
-      </motion.text>
-
-      {/* Zone label */}
-      <motion.text x={zoneX + 17.5} y="8" textAnchor="middle"
-        fill={`${tc}65`} fontSize="4" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7 }}>
+      {/* 6 — zone */}
+      <motion.text x="52.5" y="31.5" textAnchor="middle"
+        fill={`${tc}60`} fontSize="3.2" fontWeight="700" {...SL} letterSpacing="0.18em"
+        variants={txtV}>
         {zone}
       </motion.text>
-      <motion.text x={ev.x} y={nameSide ? ev.y - 15 : ev.y + 17}
-        textAnchor="middle" fill="rgba(255,255,255,0.22)" fontSize="2.2" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}>
-        CONTACT POINT
+      {/* 7 — consequence */}
+      <motion.text x="52.5" y="62" textAnchor="middle"
+        fill="rgba(255,255,255,0.32)" fontSize="2.6" {...SL} letterSpacing="0.14em"
+        variants={txtDimV}>
+        FREE KICK AWARDED
+      </motion.text>
+      <motion.text x="52.5" y="66" textAnchor="middle"
+        fill="rgba(255,255,255,0.16)" fontSize="2.1" {...SL} letterSpacing="0.12em"
+        variants={txtDimV}>
+        LAW 12 — {ev.minute}′
       </motion.text>
     </g>
   );
 }
 
+// ── CARD — disciplinary focus, card drops in prominently
 function CardScene({ ev, meta }: { ev: PitchEvent; meta: MatchMeta }) {
-  const isHome = ev.team === meta.home.name;
-  const tc = ev.color;
+  const tc    = ev.color;
   const zone  = ev.x < 35 ? "DEFENSIVE THIRD" : ev.x > 70 ? "ATTACKING THIRD" : "MIDFIELD";
   const zoneX = ev.x < 35 ? 0 : ev.x > 70 ? 70 : 35;
-  const nameSide = ev.y > 40;
-  // Card floats above player (or below if player is in top half)
-  const cardX = ev.x + (ev.x > 85 ? -11 : 5);
-  const cardY = nameSide ? ev.y - 16 : ev.y + 6;
+  // Card positioned in upper-right area of the pitch, visible and prominent
+  const cX = 75, cY = 14;
 
   return (
     <g>
-      {/* Zone band */}
+      {/* 1 — zone wash */}
       <motion.rect x={zoneX} y="0" width="35" height="68"
-        fill="rgba(255,215,0,0.07)"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}
-      />
-      {/* Incident radius */}
-      <motion.circle cx={ev.x} cy={ev.y} r="11"
-        fill="rgba(255,215,0,0.09)" stroke="#FFD700" strokeWidth="0.45" strokeDasharray="2 1.1"
-        style={SF}
-        initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      />
+        fill="rgba(255,215,0,0.07)" variants={bgV} />
+      {/* 2 — incident circle */}
+      <motion.circle cx={ev.x} cy={ev.y} r="9"
+        fill="rgba(255,215,0,0.09)" stroke="#FFD700" strokeWidth="0.45" strokeDasharray="2 1"
+        variants={bgV} />
 
-      {/* Player marker */}
-      <motion.circle cx={ev.x} cy={ev.y} r="4"
-        fill={`${tc}28`} stroke={tc} strokeWidth="0.55"
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 16 }}
-      />
-      <motion.circle cx={ev.x} cy={ev.y} r="1.5" fill={tc}
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.28, type: "spring" }}
-      />
-      <motion.text x={ev.x} y={nameSide ? ev.y + 8 : ev.y - 7.5}
-        textAnchor="middle" fill="rgba(255,255,255,0.9)"
-        fontSize="2.9" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}>
-        {ev.player}
-      </motion.text>
-
-      {/* Yellow card — drops into view */}
-      <motion.g
-        initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.58, type: "spring", stiffness: 200, damping: 18 }}>
-        {/* Card shadow */}
-        <rect x={cardX + 0.6} y={cardY + 0.8} width="7" height="10" rx="0.8"
-          fill="rgba(0,0,0,0.35)" />
-        {/* Card body */}
-        <rect x={cardX} y={cardY} width="7" height="10" rx="0.8" fill="#FFD700" />
-        <rect x={cardX + 0.6} y={cardY + 0.6} width="5.8" height="8.8" rx="0.5" fill="#FFC600" />
-        {/* Shine */}
-        <rect x={cardX + 0.9} y={cardY + 0.9} width="2.2" height="3.5" rx="0.3"
-          fill="rgba(255,255,255,0.22)" />
+      {/* 3 — card body (large, SVG rect group) */}
+      <motion.g variants={txtV}>
+        <rect x={cX + 0.7} y={cY + 1} width="11" height="16" rx="1.2"
+          fill="rgba(0,0,0,0.4)" />
+        <rect x={cX} y={cY} width="11" height="16" rx="1.2" fill="#FFD700" />
+        <rect x={cX + 0.8} y={cY + 0.8} width="9.4" height="14.4" rx="0.9" fill="#FFC600" />
+        <rect x={cX + 1.4} y={cY + 1.4} width="3.5" height="5.5" rx="0.4"
+          fill="rgba(255,255,255,0.24)" />
       </motion.g>
 
-      {/* Disciplinary focus label */}
-      <motion.text x={zoneX + 17.5} y="8" textAnchor="middle"
-        fill="rgba(255,215,0,0.65)" fontSize="4" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.72 }}>
+      {/* ── TEXT OVERLAY ── */}
+      {/* 4 — label */}
+      <motion.text x="52.5" y="11" textAnchor="middle"
+        fill="rgba(255,215,0,0.7)" fontSize="3.5" fontWeight="800" {...SL} letterSpacing="0.22em"
+        variants={txtDimV}>
+        OFFICIAL CAUTION
+      </motion.text>
+      {/* 5 — player name */}
+      <motion.text x="52.5" y="24" textAnchor="middle"
+        fill="rgba(255,255,255,0.92)" fontSize="8" fontWeight="900" {...SL}
+        variants={txtV}>
+        {ev.player}
+      </motion.text>
+      {/* 6 — zone */}
+      <motion.text x="52.5" y="31.5" textAnchor="middle"
+        fill="rgba(255,215,0,0.55)" fontSize="3.2" fontWeight="700" {...SL} letterSpacing="0.18em"
+        variants={txtV}>
         {zone}
       </motion.text>
-      <motion.text x={ev.x} y={nameSide ? ev.y - 15 : ev.y + 18}
-        textAnchor="middle" fill="rgba(255,215,0,0.45)" fontSize="2.4" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.82 }}>
-        DISCIPLINARY ACTION
+      {/* 7 — chyron */}
+      <motion.text x="52.5" y="62" textAnchor="middle"
+        fill="rgba(255,215,0,0.4)" fontSize="2.6" {...SL} letterSpacing="0.14em"
+        variants={txtDimV}>
+        YELLOW CARD ISSUED
+      </motion.text>
+      <motion.text x="52.5" y="66" textAnchor="middle"
+        fill="rgba(255,255,255,0.16)" fontSize="2.1" {...SL} letterSpacing="0.12em"
+        variants={txtDimV}>
+        ONE FURTHER CAUTION — DISMISSAL · {ev.minute}′
       </motion.text>
     </g>
   );
 }
 
+// ── SUBSTITUTION — hero is the player coming ON; clean tactical overlay
 function SubScene({ ev, meta }: { ev: PitchEvent; meta: MatchMeta }) {
   const isHome = ev.team === meta.home.name;
-  const tc = ev.color;
-  // Place the two players in the midfield zone — where tactical changes take effect
-  // Home: upper half of midfield; Away: lower half
-  const baseY = isHome ? 20 : 48;
-  const offX = 40, onX = 65;
-  const offY = baseY, onY = baseY;
+  const tc    = ev.color;
+  const inName  = ev.playerIn  ?? "—";
+  const outName = ev.playerOut ?? "—";
+  // Short names for the sub display
+  const inShort  = inName.split(" ").slice(-1)[0];
+  const outShort = outName.split(" ").slice(-1)[0];
 
   return (
     <g>
-      {/* Midfield zone */}
+      {/* 1 — midfield tactical zone */}
       <motion.rect x="35" y="0" width="35" height="68"
-        fill="rgba(80,200,180,0.07)"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}
-      />
+        fill="rgba(80,200,180,0.08)" variants={bgV} />
+      {/* 2 — vertical center line accent */}
+      <motion.rect x="51.5" y="0" width="2" height="68"
+        fill="rgba(80,200,180,0.06)" variants={bgV} />
 
-      {/* Exchange arrow */}
-      <motion.path d={`M ${offX + 5} ${offY} L ${onX - 5} ${onY}`}
-        fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="0.55" strokeDasharray="2 1.2"
-        strokeLinecap="round"
-        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-        transition={{ duration: 0.55, delay: 0.52, ease: "easeOut" }}
-      />
-      {/* Arrow tip */}
-      <motion.text x={onX - 4.5} y={onY + 1} textAnchor="middle"
-        fill="rgba(255,255,255,0.28)" fontSize="3" dominantBaseline="middle"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.0 }}>
-        ▶
+      {/* ── TEXT OVERLAY ── */}
+      {/* 3 — label */}
+      <motion.text x="52.5" y="11" textAnchor="middle"
+        fill="rgba(80,200,180,0.72)" fontSize="3.5" fontWeight="800" {...SL} letterSpacing="0.22em"
+        variants={txtDimV}>
+        TACTICAL CHANGE
       </motion.text>
-
-      {/* Player OFF — red */}
-      <motion.circle cx={offX} cy={offY} r="5.5"
-        fill="rgba(255,55,55,0.18)" stroke="rgba(255,75,75,0.7)" strokeWidth="0.55"
-        strokeDasharray="1.6 0.9"
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.15, type: "spring", stiffness: 180, damping: 14 }}
-      />
-      <motion.circle cx={offX} cy={offY} r="2" fill="rgba(255,75,75,0.85)"
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.22, type: "spring", stiffness: 260 }}
-      />
-      <motion.text x={offX} y={offY - 9} textAnchor="middle"
-        fill="rgba(255,255,255,0.88)" fontSize="2.9" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.42 }}>
-        {ev.playerOut?.split(" ").slice(-1)[0] ?? "—"}
+      {/* 4 — player IN (the focus — who comes on) */}
+      <motion.text x="52.5" y="27" textAnchor="middle"
+        fill="rgba(255,255,255,0.92)" fontSize="10" fontWeight="900" {...SL}
+        variants={txtV}>
+        {inShort}
       </motion.text>
-      <motion.text x={offX} y={offY + 9.5} textAnchor="middle"
-        fill="rgba(255,80,80,0.8)" fontSize="2.3" fontWeight="700" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}>
-        ↓ WITHDRAWN
-      </motion.text>
-
-      {/* Player ON — green */}
-      <motion.circle cx={onX} cy={onY} r="5.5"
-        fill="rgba(55,215,120,0.18)" stroke="rgba(55,215,120,0.75)" strokeWidth="0.55"
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.35, type: "spring", stiffness: 180, damping: 14 }}
-      />
-      <motion.circle cx={onX} cy={onY} r="2" fill="rgba(55,215,120,0.9)"
-        style={SF}
-        initial={{ scale: 0 }} animate={{ scale: 1 }}
-        transition={{ delay: 0.42, type: "spring", stiffness: 260 }}
-      />
-      <motion.text x={onX} y={onY - 9} textAnchor="middle"
-        fill="rgba(255,255,255,0.88)" fontSize="2.9" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}>
-        {ev.playerIn?.split(" ").slice(-1)[0] ?? "—"}
-      </motion.text>
-      <motion.text x={onX} y={onY + 9.5} textAnchor="middle"
-        fill="rgba(55,215,120,0.8)" fontSize="2.3" fontWeight="700" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.68 }}>
+      {/* 5 — "IN" tag */}
+      <motion.text x="52.5" y="33.5" textAnchor="middle"
+        fill="rgba(55,215,120,0.85)" fontSize="3.2" fontWeight="800" {...SL} letterSpacing="0.18em"
+        variants={txtV}>
         ↑ INTRODUCED
       </motion.text>
-
-      {/* Header */}
-      <motion.text x="52.5" y="8" textAnchor="middle"
-        fill="rgba(80,200,180,0.65)" fontSize="4.2" fontWeight="800" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.78 }}>
-        TACTICAL SHIFT
+      {/* 6 — full name */}
+      <motion.text x="52.5" y="39.5" textAnchor="middle"
+        fill="rgba(255,255,255,0.4)" fontSize="3" {...SL}
+        variants={txtDimV}>
+        {inName}
       </motion.text>
-      <motion.text x="52.5" y="12.5" textAnchor="middle"
-        fill="rgba(80,200,180,0.32)" fontSize="2.5" {...SL}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.88 }}>
-        {ev.team.toUpperCase()} · {ev.minute}′
+      {/* 7 — player OUT */}
+      <motion.text x="52.5" y="62" textAnchor="middle"
+        fill="rgba(255,80,80,0.6)" fontSize="2.6" {...SL} letterSpacing="0.14em"
+        variants={txtDimV}>
+        ↓ {outShort} WITHDRAWN
+      </motion.text>
+      <motion.text x="52.5" y="66" textAnchor="middle"
+        fill="rgba(255,255,255,0.16)" fontSize="2.1" {...SL} letterSpacing="0.12em"
+        variants={txtDimV}>
+        {(isHome ? meta.home.name : meta.away.name).toUpperCase()} · FORMATION SHIFT · {ev.minute}′
       </motion.text>
     </g>
   );
@@ -664,15 +585,14 @@ function SubScene({ ev, meta }: { ev: PitchEvent; meta: MatchMeta }) {
 function EmptyCanvas() {
   return (
     <g>
-      {/* Subtle centrepiece cue */}
       <motion.circle cx="52.5" cy="34" r="4.5"
-        fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="0.5"
-        animate={{ r: [4.5, 8, 4.5], opacity: [0.3, 0, 0.3] }}
-        transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+        fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="0.5"
+        animate={{ r: [4.5, 9, 4.5], opacity: [0.25, 0, 0.25] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
       />
       <text x="52.5" y="34" textAnchor="middle" dominantBaseline="middle"
-        fill="rgba(255,255,255,0.12)" fontSize="2.8"
-        fontFamily="'Barlow Condensed',sans-serif" letterSpacing="0.22em">
+        fill="rgba(255,255,255,0.1)" fontSize="2.8"
+        fontFamily="'Barlow Condensed',sans-serif" letterSpacing="0.24em">
         SELECT AN EVENT
       </text>
     </g>
@@ -682,17 +602,19 @@ function EmptyCanvas() {
 function InvestigationScene({ ev, meta }: { ev?: PitchEvent; meta: MatchMeta }) {
   if (!ev) return <EmptyCanvas />;
   switch (ev.eventType) {
-    case "goal":        return <GoalScene ev={ev} meta={meta} />;
-    case "foul":        return <FoulScene ev={ev} meta={meta} />;
-    case "Yellow Card": return <CardScene ev={ev} meta={meta} />;
-    case "substitution":return <SubScene  ev={ev} meta={meta} />;
-    default:            return <FoulScene ev={ev} meta={meta} />;
+    case "goal":         return <GoalScene ev={ev} meta={meta} />;
+    case "foul":         return <FoulScene ev={ev} meta={meta} />;
+    case "Yellow Card":  return <CardScene ev={ev} meta={meta} />;
+    case "substitution": return <SubScene  ev={ev} meta={meta} />;
+    default:             return <FoulScene ev={ev} meta={meta} />;
   }
 }
 
 // ─── Pitch view ────────────────────────────────────────────────────────────────
-// Investigation canvas: no overview markers. The pitch shows one incident at a time.
-// Selecting a new event fades the current scene out, then reveals the next.
+// The parent motion.g orchestrates a staggered entrance via sceneV.
+// On event change: old scene exits fast (opacity → 0 in 0.2s), then the new
+// scene builds in — backgrounds first, then text elements one by one.
+// This gives the "watching a match broadcast cut" feel.
 function PitchView({
   events, activeId, meta,
 }: {
@@ -706,11 +628,10 @@ function PitchView({
         style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}>
         <PitchMarkings />
 
-        {/* Investigation scene — transitions between events */}
         <AnimatePresence mode="wait">
+          {/* key change triggers exit of current scene, entrance of next */}
           <motion.g key={activeId ?? "empty"}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.32 }}>
+            variants={sceneV} initial="hidden" animate="show" exit="exit">
             <InvestigationScene ev={active} meta={meta} />
           </motion.g>
         </AnimatePresence>
@@ -1017,9 +938,12 @@ function ExplanationPanel({
 
             <HR />
 
-            {/* What happened */}
+            {/* What happened — appears shortly after the pitch scene starts */}
             <Sect label="WHAT HAPPENED">
-              <p style={{ fontSize: "0.74rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.72, margin: 0 }}>
+              <motion.p key={`what-${event.id}`}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ delay: 0.3, duration: 0.45 }}
+                style={{ fontSize: "0.74rem", color: "rgba(255,255,255,0.6)", lineHeight: 1.72, margin: 0 }}>
                 {event.keyMoment?.context
                   ?? (event.eventType === "goal"
                     ? `${event.player} scored for ${event.team} in the ${event.minute}th minute.`
@@ -1028,16 +952,19 @@ function ExplanationPanel({
                     : event.eventType === "Yellow Card"
                     ? `${event.player} received a yellow card. One further caution means dismissal.`
                     : `${event.team} made a substitution: ${event.playerIn} came on for ${event.playerOut}.`)}
-              </p>
+              </motion.p>
             </Sect>
 
             <HR />
 
-            {/* Granite analysis */}
+            {/* Granite analysis — streams in after "what happened" */}
             <Sect label={perspLabels[perspective]}>
-              <p style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.74, margin: 0 }}>
+              <motion.p key={`granite-${event.id}`}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ delay: 0.55, duration: 0.6 }}
+                style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.5)", lineHeight: 1.74, margin: 0 }}>
                 {graniteAnalysis(event, perspective)}
-              </p>
+              </motion.p>
             </Sect>
 
             {/* Player Intelligence */}
