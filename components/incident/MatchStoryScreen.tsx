@@ -804,7 +804,7 @@ function FrameScene({
   );
 }
 
-// ─── Frame controls ────────────────────────────────────────────────────────────
+// ─── Frame controls — minimal analyst style ────────────────────────────────────
 function FrameControls({
   frames, frameIdx, isPlaying, activeIdx, totalEvents,
   onPrev, onNext, onPlayPause, onFrameClick,
@@ -817,84 +817,88 @@ function FrameControls({
   onFrameClick: (i: number) => void;
   activeEvent?: PitchEvent;
 }) {
-  const frame = frames[frameIdx];
-  const tc    = activeEvent?.color ?? "#00b4ff";
-  const canPrev = frameIdx > 0;
-  const canNext = frameIdx < frames.length - 1;
+  const frame  = frames[frameIdx];
+  const tc     = activeEvent?.color ?? "#4da6ff";
+  const canP   = frameIdx > 0;
+  const canN   = frameIdx < frames.length - 1;
 
   return (
     <div style={{
-      height: 70, flexShrink: 0,
-      display: "flex", flexDirection: "column", justifyContent: "center",
-      padding: "0 20px",
-      background: "rgba(2,6,14,0.97)", backdropFilter: "blur(20px)",
-      borderTop: "1px solid rgba(255,255,255,0.05)",
-      gap: 6,
+      height: 56, flexShrink: 0,
+      display: "flex", alignItems: "center",
+      padding: "0 18px", gap: 14,
+      borderTop: "1px solid rgba(255,255,255,0.052)",
+      background: "rgba(5,8,16,1)",
     }}>
-      {/* Frame label + event counter */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      {/* Phase label — animated */}
+      <div style={{ flex: 1, minWidth: 0 }}>
         <AnimatePresence mode="wait">
           <motion.div key={`fl-${frameIdx}`}
-            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.22 }}
-            style={{ fontSize: "0.4rem", letterSpacing: "0.22em", fontWeight: 700, color: tc, fontFamily: "'Barlow Condensed',sans-serif" }}>
-            {frame?.label ?? "—"}
+            initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
+            <div style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)", marginBottom: 2 }}>
+              PHASE {frames.length > 0 ? frameIdx + 1 : "—"} / {frames.length}
+            </div>
+            <div style={{
+              fontSize: "0.62rem", fontWeight: 700, color: tc,
+              letterSpacing: "0.06em", whiteSpace: "nowrap",
+              overflow: "hidden", textOverflow: "ellipsis",
+            }}>
+              {frame?.label ?? "—"}
+            </div>
           </motion.div>
         </AnimatePresence>
-        <div style={{ fontSize: "0.36rem", color: "rgba(255,255,255,0.2)", letterSpacing: "0.18em", fontFamily: "'Barlow Condensed',sans-serif" }}>
-          FRAME {frames.length > 0 ? frameIdx + 1 : 0} / {frames.length}
-          {totalEvents > 0 && <span style={{ marginLeft: 10, color: "rgba(255,255,255,0.12)" }}>EVENT {activeIdx + 1}/{totalEvents}</span>}
-        </div>
       </div>
 
-      {/* Controls row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        {/* Prev frame */}
-        <button onClick={onPrev} disabled={!canPrev} style={{
-          background: "none", border: "none", cursor: canPrev ? "none" : "default",
-          color: canPrev ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.14)",
-          fontFamily: "inherit", fontSize: "0.72rem", padding: "2px 4px",
+      {/* Dot scrubber */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {frames.map((_, i) => (
+          <motion.button key={i} onClick={() => onFrameClick(i)}
+            animate={{ width: i === frameIdx ? 18 : 5, background: i === frameIdx ? tc : "rgba(255,255,255,0.15)" }}
+            transition={{ duration: 0.2 }}
+            style={{ height: 4, borderRadius: 2, border: "none", cursor: "none", padding: 0 }}
+          />
+        ))}
+      </div>
+
+      {/* Playback trio */}
+      <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+        <button onClick={onPrev} disabled={!canP} style={{
+          background: "none", border: "none", padding: "0 8px",
+          cursor: canP ? "none" : "default",
+          color: canP ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.1)",
+          fontSize: "1rem", lineHeight: 1,
         }}>‹</button>
-
-        {/* Play / Pause */}
         <button onClick={onPlayPause} style={{
-          background: `${tc}18`, border: `1px solid ${tc}44`,
-          borderRadius: 3, cursor: "none",
-          color: tc, fontFamily: "inherit", fontSize: "0.55rem",
-          padding: "3px 10px", letterSpacing: "0.14em",
+          background: "rgba(255,255,255,0.05)",
+          border: "1px solid rgba(255,255,255,0.09)",
+          borderRadius: 2, cursor: "none",
+          color: "rgba(255,255,255,0.55)",
+          fontFamily: "inherit", fontSize: "0.58rem",
+          padding: "4px 12px", letterSpacing: "0.1em",
+          minWidth: 56,
         }}>
-          {isPlaying ? "⏸ PAUSE" : "▶ PLAY"}
+          {isPlaying ? "⏸" : "▶"}
         </button>
-
-        {/* Frame dots */}
-        <div style={{ display: "flex", alignItems: "center", gap: 5, flex: 1 }}>
-          {frames.map((_, i) => (
-            <motion.button
-              key={i}
-              onClick={() => onFrameClick(i)}
-              animate={{ width: i === frameIdx ? 22 : 7 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              style={{
-                height: 7, borderRadius: 4, border: "none", cursor: "none",
-                background: i === frameIdx ? tc : `${tc}30`,
-                padding: 0,
-              }}
-            />
-          ))}
-        </div>
-
-        {/* Next frame */}
-        <button onClick={onNext} disabled={!canNext} style={{
-          background: "none", border: "none", cursor: canNext ? "none" : "default",
-          color: canNext ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.14)",
-          fontFamily: "inherit", fontSize: "0.72rem", padding: "2px 4px",
+        <button onClick={onNext} disabled={!canN} style={{
+          background: "none", border: "none", padding: "0 8px",
+          cursor: canN ? "none" : "default",
+          color: canN ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.1)",
+          fontSize: "1rem", lineHeight: 1,
         }}>›</button>
       </div>
+
+      {/* Event index */}
+      {totalEvents > 0 && (
+        <div style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.14)", textAlign: "right", flexShrink: 0 }}>
+          {activeIdx + 1}<span style={{ opacity: 0.45 }}>/{totalEvents}</span>
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Reconstruction board (center panel) ──────────────────────────────────────
+// ─── Investigation board — pitch is the product ────────────────────────────────
 function ReconBoard({
   frames, frameIdx, isPlaying, activeIdx, totalEvents,
   meta, activeEvent,
@@ -907,39 +911,38 @@ function ReconBoard({
   onPlayPause: () => void;
   onFrameClick: (i: number) => void;
 }) {
-  const homeColor = meta.home.color ?? "#00b4ff";
-  const awayColor = meta.away.color ?? "#ff4455";
+  const hc = meta.home.color ?? "#4da6ff";
+  const ac = meta.away.color ?? "#ff4455";
 
   return (
     <>
-      {/* Team direction bar */}
+      {/* Hairline team bar — 26px, purely directional */}
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "7px 18px", flexShrink: 0,
-        background: "rgba(2,8,16,0.6)", borderBottom: "1px solid rgba(255,255,255,0.04)",
+        height: 26, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "0 18px", flexShrink: 0,
+        borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}>
-        <div style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.18em", color: homeColor, opacity: 0.75 }}>
-          ◀ {meta.home.name.toUpperCase()}
-        </div>
-        <div style={{ fontSize: "0.34rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.16)" }}>
-          EVENT RECONSTRUCTION · TACTICAL BOARD
-        </div>
-        <div style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.18em", color: awayColor, opacity: 0.75 }}>
-          {meta.away.name.toUpperCase()} ▶
-        </div>
+        <span style={{ fontSize: "0.34rem", fontWeight: 800, letterSpacing: "0.22em", color: hc, opacity: 0.55 }}>
+          ◀ {meta.home.code}
+        </span>
+        <span style={{ fontSize: "0.28rem", letterSpacing: "0.4em", color: "rgba(255,255,255,0.1)" }}>
+          INVESTIGATION BOARD
+        </span>
+        <span style={{ fontSize: "0.34rem", fontWeight: 800, letterSpacing: "0.22em", color: ac, opacity: 0.55 }}>
+          {meta.away.code} ▶
+        </span>
       </div>
 
-      {/* Pitch SVG */}
-      <div style={{ flex: 1, padding: "10px 14px", overflow: "hidden" }}>
+      {/* Pitch — absolute fill, zero padding */}
+      <div style={{ flex: 1, padding: "6px 8px", overflow: "hidden" }}>
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg viewBox="-5 -4 117 76" preserveAspectRatio="xMidYMid meet"
             style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}>
             <PitchMarkings />
-            {/* Wrap markers in AnimatePresence so changing events fades all markers out then in */}
             <AnimatePresence mode="wait">
               <motion.g key={activeEvent?.id ?? "empty"}
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                transition={{ duration: 0.25 }}>
+                transition={{ duration: 0.22 }}>
                 <FrameScene frames={frames} frameIdx={frameIdx} />
               </motion.g>
             </AnimatePresence>
@@ -947,7 +950,6 @@ function ReconBoard({
         </div>
       </div>
 
-      {/* Frame controls */}
       <FrameControls
         frames={frames} frameIdx={frameIdx} isPlaying={isPlaying}
         activeIdx={activeIdx} totalEvents={totalEvents}
@@ -959,9 +961,18 @@ function ReconBoard({
   );
 }
 
-// ─── Left panel ────────────────────────────────────────────────────────────────
-const TYPE_ICON:  Record<string, string> = { goal: "⚽", "Yellow Card": "🟨", substitution: "🔄", foul: "·" };
-const TYPE_LABEL: Record<string, string> = { goal: "GOAL", "Yellow Card": "CARD", substitution: "SUB", foul: "FOUL" };
+// ─── Left panel — Events Library ──────────────────────────────────────────────
+const TYPE_ICON:  Record<string, string> = { goal: "⚽", "Yellow Card": "🟨", substitution: "⇄", foul: "·" };
+const TYPE_COLOR: Record<string, string> = { goal: "inherit", "Yellow Card": "#FFD700", substitution: "rgba(255,255,255,0.55)", foul: "rgba(255,255,255,0.35)" };
+
+type FilterType = "all" | "goal" | "foul" | "Yellow Card" | "substitution";
+const FILTER_OPTS: { id: FilterType; label: string }[] = [
+  { id: "all",          label: "ALL"  },
+  { id: "goal",         label: "GOAL" },
+  { id: "Yellow Card",  label: "CARD" },
+  { id: "substitution", label: "SUB"  },
+  { id: "foul",         label: "FOUL" },
+];
 
 function EventsPanel({
   events, activeId, onSelect, query, onQuery, listRef, activeRef,
@@ -972,87 +983,138 @@ function EventsPanel({
   listRef: React.RefObject<HTMLDivElement | null>;
   activeRef: React.RefObject<HTMLButtonElement | null>;
 }) {
+  const [filter, setFilter] = useState<FilterType>("all");
+
   const filtered = useMemo(() => {
-    if (!query) return events;
+    const base = filter === "all" ? events : events.filter(e => e.eventType === filter);
+    if (!query) return base;
     const q = query.toLowerCase();
-    return events.filter(e =>
+    return base.filter(e =>
       [e.player, e.playerIn, e.playerOut, String(e.minute), e.eventType, e.team]
         .some(v => v?.toLowerCase().includes(q))
     );
-  }, [events, query]);
+  }, [events, query, filter]);
 
   return (
     <div style={{
-      width: 252, flexShrink: 0, display: "flex", flexDirection: "column",
-      background: "rgba(4,8,20,0.9)", backdropFilter: "blur(22px)",
-      borderRight: "1px solid rgba(255,255,255,0.06)",
+      width: 220, flexShrink: 0, display: "flex", flexDirection: "column",
+      borderRight: "1px solid rgba(255,255,255,0.052)",
     }}>
-      <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid rgba(255,255,255,0.05)", flexShrink: 0 }}>
-        <div style={{ fontSize: "0.4rem", letterSpacing: "0.3em", color: "rgba(255,255,255,0.25)", marginBottom: 10 }}>
-          MATCH EVENTS · {events.length}
+      {/* Library header */}
+      <div style={{ padding: "18px 14px 12px", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+          <span style={{ fontSize: "0.32rem", letterSpacing: "0.36em", color: "rgba(255,255,255,0.18)" }}>EVENTS</span>
+          <span style={{ fontSize: "0.78rem", fontWeight: 900, color: "rgba(255,255,255,0.22)", lineHeight: 1 }}>{events.length}</span>
         </div>
-        <div style={{ position: "relative" }}>
-          <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: "0.75rem", color: "rgba(255,255,255,0.18)", pointerEvents: "none" }}>⌕</span>
-          <input value={query} onChange={e => onQuery(e.target.value)}
-            placeholder="Search events, players…"
-            style={{
-              width: "100%", boxSizing: "border-box",
-              background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: 4, padding: "6px 8px 6px 24px",
-              color: "rgba(255,255,255,0.72)", fontFamily: "'Barlow Condensed',sans-serif",
-              fontSize: "0.7rem", letterSpacing: "0.04em", outline: "none", cursor: "none",
-            }}
-          />
+
+        {/* Search — minimal underline style */}
+        <input value={query} onChange={e => onQuery(e.target.value)}
+          placeholder="Search players, minutes…"
+          style={{
+            width: "100%", boxSizing: "border-box",
+            background: "transparent", border: "none",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            padding: "5px 0 6px",
+            color: "rgba(255,255,255,0.6)",
+            fontFamily: "'Barlow Condensed',sans-serif",
+            fontSize: "0.65rem", letterSpacing: "0.03em",
+            outline: "none", cursor: "none",
+            marginBottom: 14,
+          }}
+        />
+
+        {/* Filter chips */}
+        <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+          {FILTER_OPTS.map(f => {
+            const active = filter === f.id;
+            return (
+              <button key={f.id} onClick={() => setFilter(f.id)}
+                style={{
+                  background: active ? "rgba(255,255,255,0.07)" : "transparent",
+                  border: active ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.05)",
+                  borderRadius: 2, padding: "3px 8px",
+                  cursor: "none", fontFamily: "inherit",
+                  fontSize: "0.3rem", letterSpacing: "0.2em",
+                  color: active ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.26)",
+                  transition: "all 0.12s",
+                }}>
+                {f.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      {/* Thin separator */}
+      <div style={{ height: 1, background: "rgba(255,255,255,0.052)", flexShrink: 0 }} />
+
+      {/* Scrollable event list */}
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
         {filtered.map(ev => {
           const isActive = ev.id === activeId;
-          const isGoal = ev.eventType === "goal";
-          const isCard = ev.eventType === "Yellow Card";
-          const isSub  = ev.eventType === "substitution";
-          const isFoul = ev.eventType === "foul";
-          const tc     = ev.color;
-          const title  = ev.keyMoment?.title
-            ?? (isSub  ? `${ev.playerIn} for ${ev.playerOut}`
+          const isGoal   = ev.eventType === "goal";
+          const isCard   = ev.eventType === "Yellow Card";
+          const isSub    = ev.eventType === "substitution";
+          const isFoul   = ev.eventType === "foul";
+          const tc       = ev.color;
+          const title    = ev.keyMoment?.title
+            ?? (isSub  ? `${ev.playerIn} ↑  ${ev.playerOut} ↓`
              : isFoul  ? ev.player
              : ev.player);
+
           return (
             <motion.button key={ev.id}
               ref={isActive ? activeRef : undefined}
               onClick={() => onSelect(ev.id)}
               style={{
-                width: "100%", display: "flex", alignItems: "flex-start", gap: 10,
-                padding: "9px 14px",
-                background: isActive ? `${tc}16` : "transparent",
-                border: "none", borderLeft: `2.5px solid ${isActive ? tc : "transparent"}`,
+                width: "100%", display: "flex", alignItems: "center", gap: 0,
+                padding: isGoal ? "11px 14px" : "7px 14px",
+                background: isActive ? `${tc}0d` : "transparent",
+                border: "none",
+                borderLeft: `2px solid ${isActive ? tc : "transparent"}`,
                 cursor: "none", textAlign: "left",
-                transition: "background 0.15s, border-color 0.15s",
               }}
-              whileHover={{ background: isActive ? `${tc}16` : "rgba(255,255,255,0.028)" }}
-            >
-              <div style={{ fontSize: isGoal ? "1.05rem" : isCard ? "0.9rem" : isSub ? "0.8rem" : "0.7rem", fontWeight: 900, lineHeight: 1, color: isActive ? tc : `${tc}88`, minWidth: 30, paddingTop: 1, transition: "color 0.15s" }}>
-                {ev.minute}&prime;
+              whileHover={{ background: isActive ? `${tc}0d` : "rgba(255,255,255,0.018)" }}>
+
+              {/* Minute column */}
+              <div style={{
+                width: 30, fontWeight: 900, lineHeight: 1, flexShrink: 0,
+                fontSize: isGoal ? "0.88rem" : "0.62rem",
+                color: isActive ? tc : `${tc}72`,
+                transition: "color 0.12s",
+              }}>
+                {ev.minute}′
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-                  <span style={{ fontSize: isGoal ? "0.85rem" : "0.7rem" }}>{TYPE_ICON[ev.eventType] ?? "·"}</span>
-                  <span style={{ fontSize: "0.38rem", letterSpacing: "0.22em", fontWeight: 700, color: isCard ? "#FFD700" : isGoal ? tc : "rgba(255,255,255,0.28)" }}>
-                    {TYPE_LABEL[ev.eventType] ?? ev.eventType.toUpperCase()}
-                    {ev.isKey && " ★"}
-                  </span>
-                </div>
-                <div style={{ fontSize: isGoal ? "0.82rem" : isFoul ? "0.6rem" : "0.7rem", fontWeight: isGoal ? 700 : 500, lineHeight: 1.25, color: isActive ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.48)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "color 0.15s" }}>
-                  {title}
-                </div>
+
+              {/* Icon — only for goals and cards */}
+              <div style={{ width: 18, fontSize: "0.65rem", flexShrink: 0, opacity: 0.85 }}>
+                {(isGoal || isCard) ? TYPE_ICON[ev.eventType] : ""}
+                {isSub ? <span style={{ fontSize: "0.55rem", color: "rgba(255,255,255,0.3)" }}>⇄</span> : null}
+              </div>
+
+              {/* Title */}
+              <div style={{
+                flex: 1, minWidth: 0,
+                fontSize: isGoal ? "0.7rem" : "0.58rem",
+                fontWeight: isGoal ? 700 : 400,
+                color: isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.38)",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                lineHeight: 1.3, transition: "color 0.12s",
+              }}>
+                {title}
+                {ev.isKey && isGoal && (
+                  <span style={{ marginLeft: 4, fontSize: "0.5rem", color: tc, opacity: 0.7 }}>★</span>
+                )}
               </div>
             </motion.button>
           );
         })}
+
         {filtered.length === 0 && (
-          <div style={{ padding: "28px 14px", textAlign: "center", fontSize: "0.6rem", color: "rgba(255,255,255,0.18)", letterSpacing: "0.14em" }}>
-            No events match
+          <div style={{ padding: "32px 14px", textAlign: "center" }}>
+            <div style={{ fontSize: "0.32rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.14)" }}>
+              NO EVENTS
+            </div>
           </div>
         )}
       </div>
@@ -1060,7 +1122,33 @@ function EventsPanel({
   );
 }
 
-// ─── Right panel ───────────────────────────────────────────────────────────────
+// ─── Stat bar row ──────────────────────────────────────────────────────────────
+function StatRow({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
+      <span style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.22)", width: 64, flexShrink: 0 }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, height: 2, background: "rgba(255,255,255,0.07)", borderRadius: 1 }}>
+        <motion.div
+          animate={{ width: `${value}%` }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          style={{ height: "100%", background: color, borderRadius: 1 }}
+        />
+      </div>
+      <span style={{ fontSize: "0.72rem", fontWeight: 800, color, width: 22, textAlign: "right", flexShrink: 0 }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ─── Dossier divider ───────────────────────────────────────────────────────────
+function DR() {
+  return <div style={{ height: 1, background: "rgba(255,255,255,0.052)", margin: "18px 0" }} />;
+}
+
+// ─── Right panel — Event Dossier ──────────────────────────────────────────────
 function ExplanationPanel({
   event, frame, frameIdx, totalFrames, allEvents, narrative, meta, perspective, homeColor,
 }: {
@@ -1074,200 +1162,233 @@ function ExplanationPanel({
   perspective: Perspective;
   homeColor: string;
 }) {
-  const [playerOpen, setPlayerOpen] = useState(false);
-  useEffect(() => { setPlayerOpen(false); }, [event?.id]);
+  const [dossierOpen, setDossierOpen] = useState(false);
+  useEffect(() => { setDossierOpen(false); }, [event?.id]);
 
-  const tc = event?.color ?? homeColor;
-  const perspLabels: Record<Perspective, string> = {
-    referee: "REFEREE VIEW", fan: "FAN GUIDE", supporter: "SUPPORTER VIEW",
-  };
+  const tc          = event?.color ?? homeColor;
+  const playerName  = event?.player ?? (event?.eventType === "substitution" ? event.playerIn : undefined);
+  const profile     = playerName ? computePlayer(playerName, allEvents) : null;
+  const perspLabel  = { referee: "REFEREE", fan: "FAN", supporter: "SUPPORTER" }[perspective];
 
-  const playerName = event?.player ?? (event?.eventType === "substitution" ? event.playerIn : undefined);
-  const profile    = playerName ? computePlayer(playerName, allEvents) : null;
+  const eventTitle = event?.keyMoment?.title
+    ?? (event?.eventType === "substitution"
+      ? `${event.playerIn} for ${event.playerOut}`
+      : event?.player);
+
+  const eventType = event?.eventType === "Yellow Card" ? "CARD"
+    : event?.eventType === "substitution" ? "SUB"
+    : event?.eventType === "goal" ? "GOAL"
+    : event?.eventType === "foul" ? "FOUL"
+    : event?.eventType?.toUpperCase() ?? "";
 
   return (
     <div style={{
-      width: 294, flexShrink: 0, display: "flex", flexDirection: "column",
-      background: "rgba(4,8,20,0.9)", backdropFilter: "blur(22px)",
-      borderLeft: "1px solid rgba(255,255,255,0.06)", overflowY: "auto",
+      width: 264, flexShrink: 0, display: "flex", flexDirection: "column",
+      borderLeft: "1px solid rgba(255,255,255,0.052)",
+      overflow: "hidden",
     }}>
       <AnimatePresence mode="wait">
         {event ? (
           <motion.div key={event.id}
-            initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.28 }}
-            style={{ padding: "18px 16px", flex: 1 }}>
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+            style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
 
-            <div style={{ height: 2, background: `linear-gradient(90deg, ${tc}, transparent)`, marginBottom: 14 }} />
+            {/* ── SECTION 1: Event Identity ── */}
+            <div style={{ padding: "20px 18px 0" }}>
+              {/* Accent strip */}
+              <div style={{ height: 1, background: `linear-gradient(90deg, ${tc}, transparent)`, marginBottom: 16 }} />
 
-            {/* INVESTIGATION header */}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: "0.37rem", letterSpacing: "0.3em", color: "rgba(255,255,255,0.22)", marginBottom: 4 }}>
-                EVENT RECONSTRUCTION
-              </div>
-              <AnimatePresence mode="wait">
-                <motion.div key={`fl-right-${frameIdx}`}
-                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }} transition={{ duration: 0.22 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontSize: "1.1rem", fontWeight: 900, color: tc, lineHeight: 1 }}>
-                      {frame?.label ?? "—"}
-                    </span>
-                    <span style={{ fontSize: "0.38rem", color: "rgba(255,255,255,0.3)", letterSpacing: "0.16em" }}>
-                      {totalFrames > 0 ? `${frameIdx + 1} / ${totalFrames}` : ""}
-                    </span>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            {/* Perspective label */}
-            <div style={{ fontSize: "0.36rem", letterSpacing: "0.24em", color: `${tc}70`, marginBottom: 10 }}>
-              {perspLabels[perspective]}
-            </div>
-
-            {/* Frame narration — primary content */}
-            <AnimatePresence mode="wait">
-              <motion.p key={`narr-${event.id}-${frameIdx}`}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] as [number,number,number,number] }}
-                style={{
-                  fontSize: "0.74rem", color: "rgba(255,255,255,0.62)",
-                  lineHeight: 1.74, margin: "0 0 14px 0",
+              {/* Minute + type */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{
+                  fontSize: "2.6rem", fontWeight: 900, lineHeight: 1,
+                  color: tc, letterSpacing: "-0.02em",
                 }}>
-                {frame?.narration ?? "Select a frame to begin reconstruction."}
-              </motion.p>
-            </AnimatePresence>
-
-            <HR />
-
-            {/* Event context (secondary) */}
-            <Sect label="EVENT CONTEXT">
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }}>
-                <span style={{ fontSize: "1.8rem", fontWeight: 900, color: tc, lineHeight: 1 }}>
-                  {event.minute}&prime;
+                  {event.minute}′
                 </span>
-                <div>
-                  <div style={{ fontSize: "0.42rem", letterSpacing: "0.22em", fontWeight: 700, color: event.eventType === "Yellow Card" ? "#FFD700" : tc }}>
-                    {TYPE_LABEL[event.eventType] ?? event.eventType.toUpperCase()}{event.isKey ? " ★" : ""}
+                <div style={{ textAlign: "right", paddingTop: 4 }}>
+                  <div style={{
+                    fontSize: "0.32rem", letterSpacing: "0.28em", fontWeight: 700,
+                    color: event.eventType === "Yellow Card" ? "#FFD700" : tc,
+                    marginBottom: 2,
+                  }}>
+                    {eventType}{event.isKey ? " ★" : ""}
                   </div>
-                  <div style={{ fontSize: "0.4rem", color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
+                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.22)" }}>
                     {event.team.toUpperCase()}
                   </div>
                 </div>
               </div>
-              <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "rgba(255,255,255,0.75)", lineHeight: 1.2 }}>
-                {event.keyMoment?.title
-                  ?? (event.eventType === "substitution"
-                    ? `${event.playerIn} for ${event.playerOut}`
-                    : event.player)}
+
+              {/* Event title */}
+              <div style={{
+                fontSize: "0.92rem", fontWeight: 800,
+                color: "rgba(255,255,255,0.88)", lineHeight: 1.2, marginBottom: 18,
+              }}>
+                {eventTitle}
               </div>
-              {event.keyMoment?.context && (
-                <p style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.38)", lineHeight: 1.6, margin: "8px 0 0" }}>
-                  {event.keyMoment.context}
-                </p>
-              )}
-            </Sect>
+            </div>
 
-            {/* Player Intelligence — collapsible */}
-            {profile && (
+            <DR />
+
+            {/* ── SECTION 2: Granite Analysis ── */}
+            <div style={{ padding: "0 18px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)" }}>
+                  GRANITE
+                </span>
+                <span style={{ fontSize: "0.28rem", letterSpacing: "0.2em", color: `${tc}60` }}>
+                  {perspLabel}
+                </span>
+              </div>
+
+              {/* Frame label */}
+              <AnimatePresence mode="wait">
+                <motion.div key={`fn-${frameIdx}`}
+                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                  <div style={{
+                    fontSize: "0.58rem", fontWeight: 700,
+                    color: tc, letterSpacing: "0.05em", marginBottom: 8,
+                  }}>
+                    {frame?.label ?? "—"}
+                    <span style={{ marginLeft: 8, fontSize: "0.3rem", fontWeight: 400, color: "rgba(255,255,255,0.22)", letterSpacing: "0.16em" }}>
+                      {totalFrames > 0 ? `${frameIdx + 1} / ${totalFrames}` : ""}
+                    </span>
+                  </div>
+                  <p style={{
+                    fontSize: "0.64rem", color: "rgba(255,255,255,0.48)",
+                    lineHeight: 1.72, margin: 0,
+                    display: "-webkit-box", WebkitBoxOrient: "vertical",
+                    WebkitLineClamp: 6, overflow: "hidden",
+                  } as React.CSSProperties}>
+                    {frame?.narration ?? "Select a frame to read the analysis."}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* ── SECTION 3: Player Card ── */}
+            {profile && playerName && (
               <>
-                <HR />
-                <button onClick={() => setPlayerOpen(o => !o)} style={{
-                  width: "100%", background: "rgba(255,255,255,0.04)",
-                  border: `1px solid ${playerOpen ? tc : "rgba(255,255,255,0.07)"}`,
-                  borderRadius: 4, padding: "8px 12px",
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  cursor: "none", fontFamily: "inherit", color: "rgba(255,255,255,0.4)", marginBottom: 10,
-                }}>
-                  <span style={{ fontSize: "0.52rem", letterSpacing: "0.18em" }}>PLAYER INTELLIGENCE</span>
-                  <span style={{ fontSize: "0.6rem" }}>{playerOpen ? "▲" : "▼"}</span>
-                </button>
+                <DR />
+                <div style={{ padding: "0 18px" }}>
+                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)", marginBottom: 10 }}>
+                    PLAYER
+                  </div>
 
-                <AnimatePresence>
-                  {playerOpen && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.28 }}
-                      style={{ overflow: "hidden" }}>
-                      <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 5, padding: "14px 12px", marginBottom: 12 }}>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#fff", marginBottom: 2 }}>{playerName}</div>
-                        <div style={{ fontSize: "0.4rem", letterSpacing: "0.18em", color: `${tc}88`, marginBottom: 12 }}>{event.team.toUpperCase()}</div>
-                        <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-                          <RadarChart values={[profile.stats.influence, profile.stats.discipline, profile.stats.involvement, profile.stats.pressure, profile.stats.impact]} color={tc} />
-                        </div>
-                        {([
-                          { key: "influence",   label: "INFLUENCE",   val: profile.stats.influence,   note: profile.explanations.influence   },
-                          { key: "discipline",  label: "DISCIPLINE",  val: profile.stats.discipline,  note: profile.explanations.discipline  },
-                          { key: "involvement", label: "INVOLVEMENT", val: profile.stats.involvement, note: profile.explanations.involvement },
-                          { key: "pressure",    label: "PRESSURE",    val: profile.stats.pressure,    note: profile.explanations.pressure    },
-                          { key: "impact",      label: "IMPACT",      val: profile.stats.impact,      note: profile.explanations.impact      },
-                        ] as const).map(({ key, label, val, note }) => (
-                          <div key={key} style={{ marginBottom: 8 }}>
-                            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                              <span style={{ fontSize: "0.42rem", letterSpacing: "0.18em", color: "rgba(255,255,255,0.28)", minWidth: 70 }}>{label}</span>
-                              <span style={{ fontSize: "0.88rem", fontWeight: 800, color: tc }}>{val}</span>
-                            </div>
-                            <div style={{ fontSize: "0.54rem", color: "rgba(255,255,255,0.32)", lineHeight: 1.5, marginTop: 1 }}>{note}</div>
+                  {/* Name + team */}
+                  <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "rgba(255,255,255,0.88)", lineHeight: 1.15, marginBottom: 2 }}>
+                    {playerName}
+                  </div>
+                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.28)", marginBottom: 14 }}>
+                    {event.team.toUpperCase()}
+                  </div>
+
+                  {/* Stat bars — three primary */}
+                  <StatRow label="INFLUENCE"  value={profile.stats.influence}  color={tc} />
+                  <StatRow label="DISCIPLINE" value={profile.stats.discipline} color={tc} />
+                  <StatRow label="IMPACT"     value={profile.stats.impact}     color={tc} />
+
+                  {/* Full dossier toggle */}
+                  <button onClick={() => setDossierOpen(o => !o)} style={{
+                    background: "none", border: "none", cursor: "none",
+                    color: "rgba(255,255,255,0.22)", fontFamily: "inherit",
+                    fontSize: "0.3rem", letterSpacing: "0.24em",
+                    padding: "8px 0 0", display: "flex", alignItems: "center", gap: 6,
+                  }}>
+                    <span style={{
+                      display: "inline-block", width: 10, height: 1,
+                      background: "rgba(255,255,255,0.15)",
+                    }} />
+                    {dossierOpen ? "COLLAPSE" : "FULL DOSSIER"}
+                  </button>
+
+                  <AnimatePresence>
+                    {dossierOpen && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.24 }}
+                        style={{ overflow: "hidden" }}>
+                        <div style={{ paddingTop: 12 }}>
+                          {/* All 5 stats */}
+                          <StatRow label="INVOLVEMENT" value={profile.stats.involvement} color={tc} />
+                          <StatRow label="PRESSURE"    value={profile.stats.pressure}    color={tc} />
+
+                          {/* Radar */}
+                          <div style={{ display: "flex", justifyContent: "center", margin: "12px 0" }}>
+                            <RadarChart values={[profile.stats.influence, profile.stats.discipline, profile.stats.involvement, profile.stats.pressure, profile.stats.impact]} color={tc} />
                           </div>
-                        ))}
-                        <div style={{ marginTop: 10, padding: "6px 8px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 3, fontSize: "0.42rem", color: "rgba(255,255,255,0.22)", lineHeight: 1.55, letterSpacing: "0.04em" }}>
-                          Values derived from match event counts in the match JSON. Not fetched from an external player database.
-                        </div>
-                        <HR />
-                        <div style={{ fontSize: "0.4rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.24)", marginBottom: 8 }}>MATCH DOSSIER</div>
-                        {profile.events.length === 0 ? (
-                          <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.22)" }}>No events recorded.</div>
-                        ) : profile.events.map((e, i) => (
-                          <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "5px 0", borderBottom: i < profile.events.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                            <span style={{ fontSize: "0.72rem", fontWeight: 800, color: e.color, minWidth: 26 }}>{e.minute}&prime;</span>
-                            <div>
-                              <div style={{ fontSize: "0.56rem", fontWeight: 700, color: "rgba(255,255,255,0.65)" }}>
-                                {TYPE_ICON[e.eventType]} {TYPE_LABEL[e.eventType] ?? e.eventType}
-                                {e.isKey && <span style={{ color: "#FFD700", marginLeft: 4 }}>★</span>}
-                              </div>
-                              {e.eventType === "substitution" && (
-                                <div style={{ fontSize: "0.5rem", color: "rgba(255,255,255,0.32)" }}>
-                                  {e.player === playerName ? `Replaced by ${e.playerIn}` : `Came on for ${e.playerOut}`}
-                                </div>
-                              )}
-                            </div>
+
+                          {/* Dossier list */}
+                          <div style={{ fontSize: "0.3rem", letterSpacing: "0.24em", color: "rgba(255,255,255,0.2)", marginBottom: 8 }}>
+                            MATCH EVENTS
                           </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                          {profile.events.length === 0 ? (
+                            <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,0.2)" }}>No events.</div>
+                          ) : profile.events.map((e, i) => (
+                            <div key={i} style={{
+                              display: "flex", gap: 8, alignItems: "center",
+                              padding: "5px 0",
+                              borderBottom: i < profile.events.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                            }}>
+                              <span style={{ fontSize: "0.72rem", fontWeight: 800, color: e.color, minWidth: 26 }}>
+                                {e.minute}′
+                              </span>
+                              <span style={{ fontSize: "0.52rem", color: "rgba(255,255,255,0.48)" }}>
+                                {TYPE_ICON[e.eventType]} {e.eventType === "substitution"
+                                  ? (e.player === playerName ? `Off — ${e.playerIn} on` : `On for ${e.playerOut}`)
+                                  : e.eventType}
+                              </span>
+                              {e.isKey && <span style={{ fontSize: "0.45rem", color: "#FFD700" }}>★</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </>
             )}
+
+            {/* ── SECTION 4: Match Metadata ── */}
+            <DR />
+            <div style={{ padding: "0 18px 20px" }}>
+              <div style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)", marginBottom: 8 }}>
+                MATCH
+              </div>
+              <div style={{ fontSize: "0.62rem", fontWeight: 700, color: "rgba(255,255,255,0.55)", marginBottom: 3 }}>
+                {meta.stage}
+              </div>
+              <div style={{ fontSize: "0.52rem", color: "rgba(255,255,255,0.28)" }}>
+                {meta.venue ?? `${meta.home.name} vs ${meta.away.name}`}
+              </div>
+              <div style={{ fontSize: "0.32rem", letterSpacing: "0.12em", color: "rgba(255,255,255,0.18)", marginTop: 3 }}>
+                {meta.date}
+              </div>
+            </div>
           </motion.div>
         ) : (
           <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem", marginBottom: 14, opacity: 0.3 }}>⚽</div>
-            <div style={{ fontSize: "0.44rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.2)", textAlign: "center" }}>
-              SELECT AN EVENT<br />TO BEGIN RECONSTRUCTION
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, gap: 12 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.08)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "1.1rem", opacity: 0.25,
+            }}>⚽</div>
+            <div style={{ fontSize: "0.3rem", letterSpacing: "0.3em", color: "rgba(255,255,255,0.16)", textAlign: "center", lineHeight: 2 }}>
+              SELECT AN EVENT<br />TO OPEN DOSSIER
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {narrative && (
-        <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(255,255,255,0.05)", flexShrink: 0 }}>
-          <div style={{ fontSize: "0.37rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.18)", marginBottom: 6 }}>MATCH CONTEXT</div>
-          <p style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.28)", lineHeight: 1.68, margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical" } as React.CSSProperties}>
-            {narrative}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
 
-function HR() {
-  return <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "13px 0" }} />;
-}
+// kept for legacy compat — no longer rendered but type-safe to reference
+function HR() { return <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "13px 0" }} />; }
 function Sect({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -1356,56 +1477,61 @@ export default function MatchStoryScreen({
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "#020810",
+      position: "fixed", inset: 0,
+      background: "#070B13",
       fontFamily: "'Barlow Condensed', sans-serif",
       display: "flex", flexDirection: "column",
       cursor: "none", overflow: "hidden",
     }}>
-      {/* Header */}
-      <motion.header initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+      {/* ── Global header — minimal 42px ── */}
+      <motion.header initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
         style={{
-          height: 50, flexShrink: 0,
+          height: 42, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "0 20px",
-          background: "rgba(2,8,16,0.97)", backdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)", zIndex: 20,
+          padding: "0 18px",
+          borderBottom: "1px solid rgba(255,255,255,0.052)",
+          zIndex: 20,
         }}>
         <motion.button onClick={onBack} style={{
           background: "none", border: "none", cursor: "none",
-          color: "rgba(255,255,255,0.3)", fontFamily: "inherit",
-          fontSize: "0.5rem", letterSpacing: "0.2em",
-        }} whileHover={{ color: "rgba(255,255,255,0.72)" }}>
-          ← ALL MATCHES
+          color: "rgba(255,255,255,0.24)", fontFamily: "inherit",
+          fontSize: "0.3rem", letterSpacing: "0.28em",
+        }} whileHover={{ color: "rgba(255,255,255,0.65)" }}>
+          ← PITCHLENS
         </motion.button>
 
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#fff", letterSpacing: "0.06em", lineHeight: 1 }}>
-            <span style={{ color: homeColor }}>{meta.home.code}</span>
-            <span style={{ color: "rgba(255,255,255,0.2)", margin: "0 8px", fontSize: "0.6rem" }}>vs</span>
-            <span style={{ color: awayColor }}>{meta.away.code}</span>
+        {/* Match identity */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: "0.88rem", fontWeight: 900, color: homeColor, lineHeight: 1 }}>
+            {meta.home.code}
+          </span>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "0.28rem", letterSpacing: "0.3em", color: "rgba(255,255,255,0.18)" }}>
+              {meta.stage}
+            </div>
           </div>
-          <div style={{ fontSize: "0.35rem", color: "rgba(255,255,255,0.2)", letterSpacing: "0.2em", marginTop: 2 }}>
-            {meta.stage} · {meta.date}
-          </div>
+          <span style={{ fontSize: "0.88rem", fontWeight: 900, color: awayColor, lineHeight: 1 }}>
+            {meta.away.code}
+          </span>
         </div>
 
-        <div style={{ fontSize: "0.4rem", letterSpacing: "0.14em", color: "rgba(255,255,255,0.18)", textAlign: "right" }}>
-          <span style={{ fontSize: "0.58rem", fontWeight: 700, color: "rgba(255,255,255,0.35)" }}>{pitchEvents.length}</span> EVENTS
+        <div style={{ fontSize: "0.28rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.16)" }}>
+          {meta.date}
         </div>
       </motion.header>
 
-      {/* 3-panel body */}
+      {/* ── Three-panel workspace ── */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-        {/* LEFT */}
+        {/* LEFT — Events Library */}
         <EventsPanel
           events={pitchEvents} activeId={activeId} onSelect={setActiveId}
           query={searchQ} onQuery={setSearchQ}
           listRef={listRef} activeRef={activeRef}
         />
 
-        {/* CENTER */}
+        {/* CENTER — Investigation Board (primary) */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <ReconBoard
             frames={frames} frameIdx={frameIdx} isPlaying={isPlaying}
@@ -1417,7 +1543,7 @@ export default function MatchStoryScreen({
           />
         </div>
 
-        {/* RIGHT */}
+        {/* RIGHT — Event Dossier */}
         <ExplanationPanel
           event={activeEvent}
           frame={currentFrame}
