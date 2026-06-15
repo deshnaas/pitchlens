@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -851,11 +851,11 @@ function FrameControls({
           <motion.div key={`fl-${frameIdx}`}
             initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }} transition={{ duration: 0.16 }}>
-            <div style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)", marginBottom: 2 }}>
+            <div style={{ fontSize: "0.42rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)", marginBottom: 2 }}>
               PHASE {frames.length > 0 ? frameIdx + 1 : "—"} / {frames.length}
             </div>
             <div style={{
-              fontSize: "0.62rem", fontWeight: 700, color: tc,
+              fontSize: "0.8rem", fontWeight: 700, color: tc,
               letterSpacing: "0.06em", whiteSpace: "nowrap",
               overflow: "hidden", textOverflow: "ellipsis",
             }}>
@@ -889,7 +889,7 @@ function FrameControls({
           border: "1px solid rgba(255,255,255,0.09)",
           borderRadius: 2, cursor: "none",
           color: "rgba(255,255,255,0.55)",
-          fontFamily: "inherit", fontSize: "0.58rem",
+          fontFamily: "inherit", fontSize: "0.76rem",
           padding: "4px 12px", letterSpacing: "0.1em",
           minWidth: 56,
         }}>
@@ -905,7 +905,7 @@ function FrameControls({
 
       {/* Event index */}
       {totalEvents > 0 && (
-        <div style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.14)", textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: "0.42rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.14)", textAlign: "right", flexShrink: 0 }}>
           {activeIdx + 1}<span style={{ opacity: 0.45 }}>/{totalEvents}</span>
         </div>
       )}
@@ -937,13 +937,13 @@ function ReconBoard({
         padding: "0 18px", flexShrink: 0,
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}>
-        <span style={{ fontSize: "0.34rem", fontWeight: 800, letterSpacing: "0.22em", color: hc, opacity: 0.55 }}>
+        <span style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.22em", color: hc, opacity: 0.55 }}>
           ◀ {meta.home.code}
         </span>
-        <span style={{ fontSize: "0.28rem", letterSpacing: "0.4em", color: "rgba(255,255,255,0.1)" }}>
+        <span style={{ fontSize: "0.38rem", letterSpacing: "0.4em", color: "rgba(255,255,255,0.1)" }}>
           INVESTIGATION BOARD
         </span>
-        <span style={{ fontSize: "0.34rem", fontWeight: 800, letterSpacing: "0.22em", color: ac, opacity: 0.55 }}>
+        <span style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.22em", color: ac, opacity: 0.55 }}>
           {meta.away.code} ▶
         </span>
       </div>
@@ -962,14 +962,14 @@ function ReconBoard({
             }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{
-                fontSize: "1.6rem", fontWeight: 900, color: activeEvent.color,
+                fontSize: "2rem", fontWeight: 900, color: activeEvent.color,
                 lineHeight: 1, letterSpacing: "-0.02em", flexShrink: 0,
               }}>
                 {activeEvent.minute}′
               </span>
               <div style={{ minWidth: 0 }}>
                 <div style={{
-                  fontSize: "0.28rem", letterSpacing: "0.3em", fontWeight: 700,
+                  fontSize: "0.38rem", letterSpacing: "0.3em", fontWeight: 700,
                   color: activeEvent.color, opacity: 0.7, marginBottom: 3,
                 }}>
                   {activeEvent.eventType === "Yellow Card" ? "CARD"
@@ -978,7 +978,7 @@ function ReconBoard({
                   {activeEvent.isKey ? " ★" : ""}
                 </div>
                 <div style={{
-                  fontSize: "0.78rem", fontWeight: 800,
+                  fontSize: "0.98rem", fontWeight: 800,
                   color: "rgba(255,255,255,0.82)", lineHeight: 1.15,
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>
@@ -990,7 +990,7 @@ function ReconBoard({
               </div>
               <div style={{ flex: 1 }} />
               <div style={{
-                fontSize: "0.3rem", letterSpacing: "0.18em",
+                fontSize: "0.42rem", letterSpacing: "0.18em",
                 color: "rgba(255,255,255,0.2)", flexShrink: 0,
               }}>
                 {activeEvent.team.toUpperCase()}
@@ -1070,8 +1070,8 @@ function EventsPanel({
       {/* Library header */}
       <div style={{ padding: "18px 14px 12px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
-          <span style={{ fontSize: "0.38rem", letterSpacing: "0.36em", color: "rgba(255,255,255,0.18)" }}>EVENTS</span>
-          <span style={{ fontSize: "0.88rem", fontWeight: 900, color: "rgba(255,255,255,0.22)", lineHeight: 1 }}>{events.length}</span>
+          <span style={{ fontSize: "0.52rem", letterSpacing: "0.36em", color: "rgba(255,255,255,0.18)" }}>EVENTS</span>
+          <span style={{ fontSize: "1.1rem", fontWeight: 900, color: "rgba(255,255,255,0.22)", lineHeight: 1 }}>{events.length}</span>
         </div>
 
         {/* Search — minimal underline style */}
@@ -1084,7 +1084,7 @@ function EventsPanel({
             padding: "5px 0 6px",
             color: "rgba(255,255,255,0.6)",
             fontFamily: "'Barlow Condensed',sans-serif",
-            fontSize: "0.72rem", letterSpacing: "0.03em",
+            fontSize: "0.9rem", letterSpacing: "0.03em",
             outline: "none", cursor: "none",
             marginBottom: 14,
           }}
@@ -1101,7 +1101,7 @@ function EventsPanel({
                   border: active ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.05)",
                   borderRadius: 2, padding: "3px 8px",
                   cursor: "none", fontFamily: "inherit",
-                  fontSize: "0.35rem", letterSpacing: "0.2em",
+                  fontSize: "0.48rem", letterSpacing: "0.2em",
                   color: active ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.26)",
                   transition: "all 0.12s",
                 }}>
@@ -1146,7 +1146,7 @@ function EventsPanel({
               {/* Minute column */}
               <div style={{
                 width: 30, fontWeight: 900, lineHeight: 1, flexShrink: 0,
-                fontSize: isGoal ? "0.96rem" : "0.7rem",
+                fontSize: isGoal ? "1.2rem" : "0.88rem",
                 color: isActive ? tc : `${tc}72`,
                 transition: "color 0.12s",
               }}>
@@ -1156,13 +1156,13 @@ function EventsPanel({
               {/* Icon — only for goals and cards */}
               <div style={{ width: 18, fontSize: "0.65rem", flexShrink: 0, opacity: 0.85 }}>
                 {(isGoal || isCard) ? TYPE_ICON[ev.eventType] : ""}
-                {isSub ? <span style={{ fontSize: "0.55rem", color: "rgba(255,255,255,0.3)" }}>⇄</span> : null}
+                {isSub ? <span style={{ fontSize: "0.7rem", color: "rgba(255,255,255,0.3)" }}>⇄</span> : null}
               </div>
 
               {/* Title */}
               <div style={{
                 flex: 1, minWidth: 0,
-                fontSize: isGoal ? "0.78rem" : "0.66rem",
+                fontSize: isGoal ? "0.98rem" : "0.84rem",
                 fontWeight: isGoal ? 700 : 400,
                 color: isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.38)",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -1170,7 +1170,7 @@ function EventsPanel({
               }}>
                 {title}
                 {ev.isKey && isGoal && (
-                  <span style={{ marginLeft: 4, fontSize: "0.5rem", color: tc, opacity: 0.7 }}>★</span>
+                  <span style={{ marginLeft: 4, fontSize: "0.66rem", color: tc, opacity: 0.7 }}>★</span>
                 )}
               </div>
             </motion.button>
@@ -1179,7 +1179,7 @@ function EventsPanel({
 
         {filtered.length === 0 && (
           <div style={{ padding: "32px 14px", textAlign: "center" }}>
-            <div style={{ fontSize: "0.32rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.14)" }}>
+            <div style={{ fontSize: "0.44rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.14)" }}>
               NO EVENTS
             </div>
           </div>
@@ -1193,7 +1193,7 @@ function EventsPanel({
 function StatRow({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 7 }}>
-      <span style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.22)", width: 64, flexShrink: 0 }}>
+      <span style={{ fontSize: "0.42rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.22)", width: 64, flexShrink: 0 }}>
         {label}
       </span>
       <div style={{ flex: 1, height: 2, background: "rgba(255,255,255,0.07)", borderRadius: 1 }}>
@@ -1203,7 +1203,7 @@ function StatRow({ label, value, color }: { label: string; value: number; color:
           style={{ height: "100%", background: color, borderRadius: 1 }}
         />
       </div>
-      <span style={{ fontSize: "0.72rem", fontWeight: 800, color, width: 22, textAlign: "right", flexShrink: 0 }}>
+      <span style={{ fontSize: "0.9rem", fontWeight: 800, color, width: 22, textAlign: "right", flexShrink: 0 }}>
         {value}
       </span>
     </div>
@@ -1257,15 +1257,15 @@ function GranitePanel({
               borderBottom: "1px solid rgba(255,255,255,0.04)",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <span style={{ fontSize: "2rem", fontWeight: 900, color: tc, lineHeight: 1, letterSpacing: "-0.02em" }}>
+                <span style={{ fontSize: "2.5rem", fontWeight: 900, color: tc, lineHeight: 1, letterSpacing: "-0.02em" }}>
                   {event.minute}′
                 </span>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.28em", color: tc, opacity: 0.75, marginBottom: 3 }}>
+                  <div style={{ fontSize: "0.42rem", letterSpacing: "0.28em", color: tc, opacity: 0.75, marginBottom: 3 }}>
                     {eventType}{event.isKey ? " ★" : ""} · {event.team.toUpperCase()}
                   </div>
                   <div style={{
-                    fontSize: "0.86rem", fontWeight: 800,
+                    fontSize: "1.08rem", fontWeight: 800,
                     color: "rgba(255,255,255,0.88)", lineHeight: 1.15,
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>
@@ -1282,10 +1282,10 @@ function GranitePanel({
             }}>
               <div style={{ height: 1, background: `linear-gradient(90deg, ${tc}80, ${tc}20, transparent)`, marginBottom: 10 }} />
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-                <span style={{ fontSize: "0.56rem", fontWeight: 700, letterSpacing: "0.24em", color: "rgba(255,255,255,0.78)" }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.24em", color: "rgba(255,255,255,0.78)" }}>
                   IBM GRANITE
                 </span>
-                <span style={{ fontSize: "0.28rem", letterSpacing: "0.18em", color: `${tc}88`, flexShrink: 0 }}>
+                <span style={{ fontSize: "0.38rem", letterSpacing: "0.18em", color: `${tc}88`, flexShrink: 0 }}>
                   REFEREE ASSISTANT · {perspLabel}
                 </span>
               </div>
@@ -1298,10 +1298,10 @@ function GranitePanel({
         ) : (
           <motion.div key="empty-g" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }}>
-            <div style={{ fontSize: "0.56rem", fontWeight: 700, letterSpacing: "0.3em", color: "rgba(255,255,255,0.1)" }}>
+            <div style={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.3em", color: "rgba(255,255,255,0.1)" }}>
               IBM GRANITE
             </div>
-            <div style={{ fontSize: "0.3rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.1)", textAlign: "center", lineHeight: 2 }}>
+            <div style={{ fontSize: "0.42rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.1)", textAlign: "center", lineHeight: 2 }}>
               REFEREE ASSISTANT<br />SELECT AN EVENT TO BEGIN
             </div>
           </motion.div>
@@ -1335,7 +1335,7 @@ function PlayerPanel({
         height: 40, display: "flex", alignItems: "center", padding: "0 16px", flexShrink: 0,
         borderBottom: "1px solid rgba(255,255,255,0.04)",
       }}>
-        <span style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)" }}>
+        <span style={{ fontSize: "0.42rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)" }}>
           PLAYER INTELLIGENCE
         </span>
       </div>
@@ -1349,10 +1349,10 @@ function PlayerPanel({
 
             {/* Player identity */}
             <div style={{ padding: "14px 16px 10px" }}>
-              <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "rgba(255,255,255,0.88)", lineHeight: 1.15, marginBottom: 2 }}>
+              <div style={{ fontSize: "1.08rem", fontWeight: 800, color: "rgba(255,255,255,0.88)", lineHeight: 1.15, marginBottom: 2 }}>
                 {playerName}
               </div>
-              <div style={{ fontSize: "0.28rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.28)" }}>
+              <div style={{ fontSize: "0.38rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.28)" }}>
                 {event.team.toUpperCase()}
               </div>
             </div>
@@ -1384,7 +1384,7 @@ function PlayerPanel({
             {/* Match events (compact) */}
             {profile.events.length > 0 && (
               <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)", padding: "10px 16px 0" }}>
-                <div style={{ fontSize: "0.26rem", letterSpacing: "0.24em", color: "rgba(255,255,255,0.16)", marginBottom: 7 }}>
+                <div style={{ fontSize: "0.36rem", letterSpacing: "0.24em", color: "rgba(255,255,255,0.16)", marginBottom: 7 }}>
                   MATCH EVENTS
                 </div>
                 {profile.events.map((e, i) => (
@@ -1392,13 +1392,13 @@ function PlayerPanel({
                     display: "flex", gap: 7, alignItems: "center", padding: "4px 0",
                     borderBottom: i < profile.events.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
                   }}>
-                    <span style={{ fontSize: "0.66rem", fontWeight: 800, color: e.color, minWidth: 22 }}>{e.minute}′</span>
-                    <span style={{ fontSize: "0.48rem", color: "rgba(255,255,255,0.42)", lineHeight: 1.3 }}>
+                    <span style={{ fontSize: "0.84rem", fontWeight: 800, color: e.color, minWidth: 22 }}>{e.minute}′</span>
+                    <span style={{ fontSize: "0.64rem", color: "rgba(255,255,255,0.42)", lineHeight: 1.3 }}>
                       {TYPE_ICON[e.eventType]} {e.eventType === "substitution"
                         ? (e.player === playerName ? `Off` : `On`)
                         : e.eventType}
                     </span>
-                    {e.isKey && <span style={{ fontSize: "0.4rem", color: "#FFD700" }}>★</span>}
+                    {e.isKey && <span style={{ fontSize: "0.54rem", color: "#FFD700" }}>★</span>}
                   </div>
                 ))}
               </div>
@@ -1406,27 +1406,27 @@ function PlayerPanel({
 
             {/* Match metadata */}
             <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)", padding: "10px 16px 16px", marginTop: 10 }}>
-              <div style={{ fontSize: "0.26rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.16)", marginBottom: 5 }}>MATCH</div>
-              <div style={{ fontSize: "0.58rem", fontWeight: 700, color: "rgba(255,255,255,0.46)", marginBottom: 2 }}>{meta.stage}</div>
-              <div style={{ fontSize: "0.48rem", color: "rgba(255,255,255,0.24)", lineHeight: 1.4 }}>
+              <div style={{ fontSize: "0.36rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.16)", marginBottom: 5 }}>MATCH</div>
+              <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "rgba(255,255,255,0.46)", marginBottom: 2 }}>{meta.stage}</div>
+              <div style={{ fontSize: "0.64rem", color: "rgba(255,255,255,0.24)", lineHeight: 1.4 }}>
                 {meta.venue ?? `${meta.home.name} vs ${meta.away.name}`}
               </div>
-              <div style={{ fontSize: "0.26rem", letterSpacing: "0.1em", color: "rgba(255,255,255,0.14)", marginTop: 3 }}>{meta.date}</div>
+              <div style={{ fontSize: "0.36rem", letterSpacing: "0.1em", color: "rgba(255,255,255,0.14)", marginTop: 3 }}>{meta.date}</div>
             </div>
           </motion.div>
         ) : (
           <motion.div key="pi-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "14px 16px" }}>
-              <div style={{ fontSize: "0.26rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.16)", marginBottom: 5 }}>MATCH</div>
-              <div style={{ fontSize: "0.58rem", fontWeight: 700, color: "rgba(255,255,255,0.46)", marginBottom: 2 }}>{meta.stage}</div>
-              <div style={{ fontSize: "0.48rem", color: "rgba(255,255,255,0.24)" }}>
+              <div style={{ fontSize: "0.36rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.16)", marginBottom: 5 }}>MATCH</div>
+              <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "rgba(255,255,255,0.46)", marginBottom: 2 }}>{meta.stage}</div>
+              <div style={{ fontSize: "0.64rem", color: "rgba(255,255,255,0.24)" }}>
                 {meta.venue ?? `${meta.home.name} vs ${meta.away.name}`}
               </div>
-              <div style={{ fontSize: "0.26rem", letterSpacing: "0.1em", color: "rgba(255,255,255,0.14)", marginTop: 3 }}>{meta.date}</div>
+              <div style={{ fontSize: "0.36rem", letterSpacing: "0.1em", color: "rgba(255,255,255,0.14)", marginTop: 3 }}>{meta.date}</div>
             </div>
             <div style={{ padding: "24px 16px", textAlign: "center" }}>
-              <div style={{ fontSize: "0.28rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.1)", lineHeight: 2 }}>
+              <div style={{ fontSize: "0.38rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.1)", lineHeight: 2 }}>
                 NO PLAYER<br />DATA
               </div>
             </div>
@@ -1583,13 +1583,13 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
               borderRadius: m.role === "assistant" ? "0 4px 4px 0" : "0 3px 3px 0",
             }}>
             {m.role === "assistant" && (
-              <div style={{ fontSize: "0.26rem", letterSpacing: "0.22em", color: tc, opacity: 0.85, marginBottom: 6 }}>GRANITE</div>
+              <div style={{ fontSize: "0.36rem", letterSpacing: "0.22em", color: tc, opacity: 0.85, marginBottom: 6 }}>GRANITE</div>
             )}
             {m.role === "user" && (
-              <div style={{ fontSize: "0.24rem", letterSpacing: "0.18em", color: "rgba(255,255,255,0.28)", marginBottom: 4 }}>YOU</div>
+              <div style={{ fontSize: "0.34rem", letterSpacing: "0.18em", color: "rgba(255,255,255,0.28)", marginBottom: 4 }}>YOU</div>
             )}
             <p style={{
-              fontSize: flex ? "0.68rem" : "0.64rem",
+              fontSize: flex ? "0.86rem" : "0.82rem",
               color: m.role === "assistant" ? "rgba(255,255,255,0.68)" : "rgba(255,255,255,0.42)",
               margin: 0, lineHeight: 1.7, whiteSpace: "pre-line",
             }}>{m.text}</p>
@@ -1600,7 +1600,7 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           style={{ padding: "8px 14px", background: "rgba(255,255,255,0.025)", borderRadius: 3 }}>
           <motion.span animate={{ opacity: [0.3, 0.9, 0.3] }} transition={{ duration: 1.2, repeat: Infinity }}
-            style={{ fontSize: "0.55rem", color: tc, letterSpacing: "0.14em" }}>
+            style={{ fontSize: "0.7rem", color: tc, letterSpacing: "0.14em" }}>
             ANALYZING…
           </motion.span>
         </motion.div>
@@ -1622,7 +1622,7 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
             border: `1px solid ${tc}35`,
             borderRadius: 2, cursor: "none",
             fontFamily: "inherit",
-            fontSize: flex ? "0.34rem" : "0.32rem",
+            fontSize: flex ? "0.46rem" : "0.44rem",
             letterSpacing: "0.1em",
             color: "rgba(255,255,255,0.52)",
             padding: flex ? "6px 11px" : "5px 10px",
@@ -1645,7 +1645,7 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
             padding: flex ? "9px 12px" : "8px 10px",
             color: "rgba(255,255,255,0.75)",
             fontFamily: "inherit",
-            fontSize: flex ? "0.66rem" : "0.64rem",
+            fontSize: flex ? "0.84rem" : "0.82rem",
             letterSpacing: "0.02em",
             outline: "none", cursor: "none",
           }}
@@ -1654,7 +1654,7 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
           background: `${tc}22`, border: `1px solid ${tc}45`,
           borderRadius: 3, cursor: "none",
           color: tc, fontFamily: "inherit",
-          fontSize: "0.9rem", padding: "0 16px", flexShrink: 0,
+          fontSize: "1.14rem", padding: "0 16px", flexShrink: 0,
         }}>→</button>
       </div>
     </div>
@@ -1672,9 +1672,9 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: "0.34rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.22)" }}>IBM GRANITE</span>
+        <span style={{ fontSize: "0.46rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.22)" }}>IBM GRANITE</span>
         <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${tc}30, transparent)` }} />
-        <span style={{ fontSize: "0.28rem", letterSpacing: "0.18em", color: tc, opacity: 0.6 }}>REFEREE ASSISTANT</span>
+        <span style={{ fontSize: "0.38rem", letterSpacing: "0.18em", color: tc, opacity: 0.6 }}>REFEREE ASSISTANT</span>
       </div>
       {msgThread}
       {actionsAndInput}
@@ -1781,28 +1781,28 @@ export default function MatchStoryScreen({
         <motion.button onClick={onBack} style={{
           background: "none", border: "none", cursor: "none",
           color: "rgba(255,255,255,0.24)", fontFamily: "inherit",
-          fontSize: "0.3rem", letterSpacing: "0.28em",
+          fontSize: "0.42rem", letterSpacing: "0.28em",
         }} whileHover={{ color: "rgba(255,255,255,0.65)" }}>
           ← PITCHLENS
         </motion.button>
 
         {/* Match identity */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: "0.88rem", fontWeight: 900, color: homeColor, lineHeight: 1 }}>
+          <span style={{ fontSize: "1.1rem", fontWeight: 900, color: homeColor, lineHeight: 1 }}>
             {meta.home.code}
           </span>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "0.28rem", letterSpacing: "0.3em", color: "rgba(255,255,255,0.18)" }}>
+            <div style={{ fontSize: "0.38rem", letterSpacing: "0.3em", color: "rgba(255,255,255,0.18)" }}>
               {meta.stage}
             </div>
           </div>
-          <span style={{ fontSize: "0.88rem", fontWeight: 900, color: awayColor, lineHeight: 1 }}>
+          <span style={{ fontSize: "1.1rem", fontWeight: 900, color: awayColor, lineHeight: 1 }}>
             {meta.away.code}
           </span>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ fontSize: "0.28rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.16)" }}>
+          <div style={{ fontSize: "0.38rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.16)" }}>
             {meta.date}
           </div>
           <motion.button onClick={toggleFs}
@@ -1811,7 +1811,7 @@ export default function MatchStoryScreen({
               background: "none", border: "1px solid rgba(255,255,255,0.09)",
               borderRadius: 2, cursor: "none",
               color: "rgba(255,255,255,0.28)", fontFamily: "inherit",
-              fontSize: "0.62rem", padding: "2px 8px", lineHeight: 1.4,
+              fontSize: "0.8rem", padding: "2px 8px", lineHeight: 1.4,
             }}
             title={isFs ? "Exit Fullscreen" : "Fullscreen"}>
             {isFs ? "⊡" : "⛶"}
