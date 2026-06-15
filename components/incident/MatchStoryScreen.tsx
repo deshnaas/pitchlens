@@ -537,7 +537,7 @@ function RadarChart({ values, color }: { values: number[]; color: string }) {
   const dataPath = `M ${values.map((v, i) => pt(v, i).join(" ")).join(" L ")} Z`;
   const animKey = values.join(",");
   return (
-    <svg width="104" height="104" viewBox="0 0 104 104">
+    <svg width="128" height="128" viewBox="0 0 104 104">
       {[0.25, 0.5, 0.75, 1].map(f => (
         <path key={f} d={ringPath(f)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="0.7" />
       ))}
@@ -1250,7 +1250,7 @@ function ExplanationPanel({
 
   return (
     <div style={{
-      width: 264, flexShrink: 0, display: "flex", flexDirection: "column",
+      width: 300, flexShrink: 0, display: "flex", flexDirection: "column",
       borderLeft: "1px solid rgba(255,255,255,0.052)",
       overflow: "hidden",
     }}>
@@ -1299,38 +1299,38 @@ function ExplanationPanel({
 
             <DR />
 
-            {/* ── SECTION 2: Frame narration (compact) ── */}
+            {/* ── SECTION 2: IBM Granite Referee Assistant (primary) ── */}
+            <div style={{ padding: "0 18px" }}>
+              <GraniteAssistant event={event} />
+            </div>
+
+            <DR />
+
+            {/* ── SECTION 3: Frame narration (compact, below chatbot) ── */}
             <div style={{ padding: "0 18px" }}>
               <AnimatePresence mode="wait">
                 <motion.div key={`fn-${frameIdx}`}
                   initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
                   <div style={{
-                    fontSize: "0.52rem", fontWeight: 700,
-                    color: tc, letterSpacing: "0.05em", marginBottom: 6,
+                    fontSize: "0.48rem", fontWeight: 700,
+                    color: tc, letterSpacing: "0.05em", marginBottom: 5,
                   }}>
                     {frame?.label ?? "—"}
-                    <span style={{ marginLeft: 8, fontSize: "0.28rem", fontWeight: 400, color: "rgba(255,255,255,0.22)", letterSpacing: "0.16em" }}>
+                    <span style={{ marginLeft: 8, fontSize: "0.26rem", fontWeight: 400, color: "rgba(255,255,255,0.2)", letterSpacing: "0.16em" }}>
                       {totalFrames > 0 ? `${frameIdx + 1}/${totalFrames}` : ""}
                     </span>
                   </div>
                   <p style={{
-                    fontSize: "0.6rem", color: "rgba(255,255,255,0.42)",
-                    lineHeight: 1.65, margin: 0,
+                    fontSize: "0.58rem", color: "rgba(255,255,255,0.38)",
+                    lineHeight: 1.6, margin: 0,
                     display: "-webkit-box", WebkitBoxOrient: "vertical",
-                    WebkitLineClamp: 4, overflow: "hidden",
+                    WebkitLineClamp: 3, overflow: "hidden",
                   } as React.CSSProperties}>
                     {frame?.narration ?? "Select a frame to read the analysis."}
                   </p>
                 </motion.div>
               </AnimatePresence>
-            </div>
-
-            <DR />
-
-            {/* ── SECTION 3: IBM Granite Referee Assistant ── */}
-            <div style={{ padding: "0 18px" }}>
-              <GraniteAssistant event={event} />
             </div>
 
             {/* ── SECTION 4: Player Card ── */}
@@ -1350,8 +1350,15 @@ function ExplanationPanel({
                     {event.team.toUpperCase()}
                   </div>
 
-                  {/* Radar chart — always visible */}
-                  <div style={{ display: "flex", justifyContent: "center", margin: "0 0 14px" }}>
+                  {/* Radar chart — prominent, always visible */}
+                  <div style={{
+                    display: "flex", justifyContent: "center", alignItems: "center",
+                    margin: "0 0 16px",
+                    padding: "12px 0",
+                    background: "rgba(255,255,255,0.018)",
+                    borderRadius: 4,
+                    border: "1px solid rgba(255,255,255,0.04)",
+                  }}>
                     <RadarChart
                       values={[profile.stats.influence, profile.stats.discipline, profile.stats.involvement, profile.stats.pressure, profile.stats.impact]}
                       color={tc}
@@ -1586,17 +1593,17 @@ function GraniteAssistant({ event }: { event: PitchEvent }) {
   return (
     <div>
       {/* Section header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)" }}>IBM GRANITE</span>
-        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.04)" }} />
-        <span style={{ fontSize: "0.26rem", letterSpacing: "0.14em", color: `${tc}55` }}>REFEREE ASSISTANT</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: "0.34rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.22)" }}>IBM GRANITE</span>
+        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${tc}30, transparent)` }} />
+        <span style={{ fontSize: "0.28rem", letterSpacing: "0.18em", color: tc, opacity: 0.6 }}>REFEREE ASSISTANT</span>
       </div>
 
       {/* Message thread */}
       <div ref={scrollRef} style={{
-        maxHeight: 180, overflowY: "auto",
-        display: "flex", flexDirection: "column", gap: 6,
-        marginBottom: 10,
+        maxHeight: 260, overflowY: "auto",
+        display: "flex", flexDirection: "column", gap: 7,
+        marginBottom: 12,
         scrollbarWidth: "none",
       }}>
         <AnimatePresence initial={false}>
@@ -1605,18 +1612,21 @@ function GraniteAssistant({ event }: { event: PitchEvent }) {
               initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18 }}
               style={{
-                padding: m.role === "assistant" ? "8px 10px" : "4px 0",
-                background: m.role === "assistant" ? "rgba(255,255,255,0.035)" : "transparent",
-                borderLeft: m.role === "assistant" ? `2px solid ${tc}55` : "none",
-                borderRadius: m.role === "assistant" ? "0 3px 3px 0" : 0,
+                padding: m.role === "assistant" ? "10px 12px" : "5px 0 5px 4px",
+                background: m.role === "assistant" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.015)",
+                borderLeft: m.role === "assistant" ? `2px solid ${tc}66` : `1px solid rgba(255,255,255,0.1)`,
+                borderRadius: m.role === "assistant" ? "0 4px 4px 0" : "0 3px 3px 0",
               }}>
               {m.role === "assistant" && (
-                <div style={{ fontSize: "0.24rem", letterSpacing: "0.2em", color: tc, opacity: 0.7, marginBottom: 4 }}>GRANITE</div>
+                <div style={{ fontSize: "0.26rem", letterSpacing: "0.22em", color: tc, opacity: 0.8, marginBottom: 5 }}>GRANITE</div>
+              )}
+              {m.role === "user" && (
+                <div style={{ fontSize: "0.24rem", letterSpacing: "0.18em", color: "rgba(255,255,255,0.28)", marginBottom: 4 }}>YOU</div>
               )}
               <p style={{
-                fontSize: "0.58rem",
-                color: m.role === "assistant" ? "rgba(255,255,255,0.58)" : "rgba(255,255,255,0.35)",
-                margin: 0, lineHeight: 1.6,
+                fontSize: "0.64rem",
+                color: m.role === "assistant" ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.4)",
+                margin: 0, lineHeight: 1.68,
                 whiteSpace: "pre-line",
               }}>{m.text}</p>
             </motion.div>
@@ -1636,7 +1646,7 @@ function GraniteAssistant({ event }: { event: PitchEvent }) {
       </div>
 
       {/* Quick actions */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
         {[
           { id: "why",       label: "Why this decision?" },
           { id: "law",       label: "Applicable law"     },
@@ -1644,20 +1654,20 @@ function GraniteAssistant({ event }: { event: PitchEvent }) {
           { id: "checklist", label: "Referee checklist"  },
         ].map(qa => (
           <button key={qa.id} onClick={() => handleQuick(qa.id)} style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${tc}30`,
+            background: "rgba(255,255,255,0.045)",
+            border: `1px solid ${tc}38`,
             borderRadius: 2, cursor: "none",
-            fontFamily: "inherit", fontSize: "0.28rem",
-            letterSpacing: "0.14em",
-            color: "rgba(255,255,255,0.42)",
-            padding: "4px 8px",
+            fontFamily: "inherit", fontSize: "0.32rem",
+            letterSpacing: "0.1em",
+            color: "rgba(255,255,255,0.5)",
+            padding: "5px 10px",
             transition: "all 0.1s",
           }}>{qa.label}</button>
         ))}
       </div>
 
       {/* Chat input */}
-      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
@@ -1665,24 +1675,25 @@ function GraniteAssistant({ event }: { event: PitchEvent }) {
           placeholder="Ask Granite about this incident…"
           style={{
             flex: 1,
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderBottom: `1px solid ${tc}40`,
-            borderRadius: "2px 2px 0 0",
-            padding: "6px 9px",
-            color: "rgba(255,255,255,0.65)",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.07)",
+            borderBottom: `2px solid ${tc}50`,
+            borderRadius: "3px 3px 0 0",
+            padding: "8px 10px",
+            color: "rgba(255,255,255,0.72)",
             fontFamily: "inherit",
-            fontSize: "0.58rem",
+            fontSize: "0.64rem",
             letterSpacing: "0.02em",
             outline: "none",
             cursor: "none",
           }}
         />
         <button onClick={handleSend} style={{
-          background: `${tc}18`, border: `1px solid ${tc}35`,
-          borderRadius: 2, cursor: "none",
+          background: `${tc}22`, border: `1px solid ${tc}45`,
+          borderRadius: 3, cursor: "none",
           color: tc, fontFamily: "inherit",
-          fontSize: "0.7rem", padding: "5px 10px",
+          fontSize: "0.85rem", padding: "0 14px",
+          flexShrink: 0,
         }}>→</button>
       </div>
     </div>
