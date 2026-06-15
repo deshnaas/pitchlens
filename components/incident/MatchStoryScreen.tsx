@@ -1216,41 +1216,31 @@ function DR() {
 }
 
 // ─── Right panel — Event Dossier ──────────────────────────────────────────────
-function ExplanationPanel({
-  event, frame, frameIdx, totalFrames, allEvents, narrative, meta, perspective, homeColor,
+// ─── Granite Panel — right-center, primary feature column ────────────────────
+function GranitePanel({
+  event, frame, frameIdx, totalFrames, perspective,
 }: {
   event?: PitchEvent;
   frame?: ReconFrame | null;
   frameIdx: number;
   totalFrames: number;
-  allEvents: PitchEvent[];
-  narrative: string;
-  meta: MatchMeta;
   perspective: Perspective;
-  homeColor: string;
 }) {
-  const [dossierOpen, setDossierOpen] = useState(false);
-  useEffect(() => { setDossierOpen(false); }, [event?.id]);
-
-  const tc          = event?.color ?? homeColor;
-  const playerName  = event?.player ?? (event?.eventType === "substitution" ? event.playerIn : undefined);
-  const profile     = playerName ? computePlayer(playerName, allEvents) : null;
-  const perspLabel  = { referee: "REFEREE", fan: "FAN", supporter: "SUPPORTER" }[perspective];
-
-  const eventTitle = event?.keyMoment?.title
-    ?? (event?.eventType === "substitution"
-      ? `${event.playerIn} for ${event.playerOut}`
-      : event?.player);
-
+  const tc = event?.color ?? "#4da6ff";
+  const perspLabel = { referee: "REFEREE", fan: "FAN", supporter: "SUPPORTER" }[perspective];
   const eventType = event?.eventType === "Yellow Card" ? "CARD"
     : event?.eventType === "substitution" ? "SUB"
     : event?.eventType === "goal" ? "GOAL"
     : event?.eventType === "foul" ? "FOUL"
     : event?.eventType?.toUpperCase() ?? "";
+  const eventTitle = event?.keyMoment?.title
+    ?? (event?.eventType === "substitution"
+      ? `${event.playerIn} for ${event.playerOut}`
+      : event?.player);
 
   return (
     <div style={{
-      width: 300, flexShrink: 0, display: "flex", flexDirection: "column",
+      width: 360, flexShrink: 0, display: "flex", flexDirection: "column",
       borderLeft: "1px solid rgba(255,255,255,0.052)",
       overflow: "hidden",
     }}>
@@ -1258,201 +1248,61 @@ function ExplanationPanel({
         {event ? (
           <motion.div key={event.id}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-            style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+            exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
+            style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-            {/* ── SECTION 1: Event Identity ── */}
-            <div style={{ padding: "20px 18px 0" }}>
-              {/* Accent strip */}
-              <div style={{ height: 1, background: `linear-gradient(90deg, ${tc}, transparent)`, marginBottom: 16 }} />
-
-              {/* Minute + type */}
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{
-                  fontSize: "2.6rem", fontWeight: 900, lineHeight: 1,
-                  color: tc, letterSpacing: "-0.02em",
-                }}>
+            {/* ── Event identity strip ── */}
+            <div style={{
+              padding: "14px 20px 12px", flexShrink: 0,
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <span style={{ fontSize: "2rem", fontWeight: 900, color: tc, lineHeight: 1, letterSpacing: "-0.02em" }}>
                   {event.minute}′
                 </span>
-                <div style={{ textAlign: "right", paddingTop: 4 }}>
-                  <div style={{
-                    fontSize: "0.32rem", letterSpacing: "0.28em", fontWeight: 700,
-                    color: event.eventType === "Yellow Card" ? "#FFD700" : tc,
-                    marginBottom: 2,
-                  }}>
-                    {eventType}{event.isKey ? " ★" : ""}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.28em", color: tc, opacity: 0.75, marginBottom: 3 }}>
+                    {eventType}{event.isKey ? " ★" : ""} · {event.team.toUpperCase()}
                   </div>
-                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.22)" }}>
-                    {event.team.toUpperCase()}
+                  <div style={{
+                    fontSize: "0.86rem", fontWeight: 800,
+                    color: "rgba(255,255,255,0.88)", lineHeight: 1.15,
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {eventTitle}
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Event title */}
-              <div style={{
-                fontSize: "0.92rem", fontWeight: 800,
-                color: "rgba(255,255,255,0.88)", lineHeight: 1.2, marginBottom: 18,
-              }}>
-                {eventTitle}
+            {/* ── IBM Granite header ── */}
+            <div style={{
+              padding: "14px 20px 10px", flexShrink: 0,
+              background: `linear-gradient(180deg, ${tc}09 0%, transparent 100%)`,
+            }}>
+              <div style={{ height: 1, background: `linear-gradient(90deg, ${tc}80, ${tc}20, transparent)`, marginBottom: 10 }} />
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ fontSize: "0.56rem", fontWeight: 700, letterSpacing: "0.24em", color: "rgba(255,255,255,0.78)" }}>
+                  IBM GRANITE
+                </span>
+                <span style={{ fontSize: "0.28rem", letterSpacing: "0.18em", color: `${tc}88`, flexShrink: 0 }}>
+                  REFEREE ASSISTANT · {perspLabel}
+                </span>
               </div>
             </div>
 
-            <DR />
+            {/* ── Granite assistant fills remaining height ── */}
+            <GraniteAssistant event={event} flex />
 
-            {/* ── SECTION 2: IBM Granite Referee Assistant (primary) ── */}
-            <div style={{ padding: "0 18px" }}>
-              <GraniteAssistant event={event} />
-            </div>
-
-            <DR />
-
-            {/* ── SECTION 3: Frame narration (compact, below chatbot) ── */}
-            <div style={{ padding: "0 18px" }}>
-              <AnimatePresence mode="wait">
-                <motion.div key={`fn-${frameIdx}`}
-                  initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-                  <div style={{
-                    fontSize: "0.48rem", fontWeight: 700,
-                    color: tc, letterSpacing: "0.05em", marginBottom: 5,
-                  }}>
-                    {frame?.label ?? "—"}
-                    <span style={{ marginLeft: 8, fontSize: "0.26rem", fontWeight: 400, color: "rgba(255,255,255,0.2)", letterSpacing: "0.16em" }}>
-                      {totalFrames > 0 ? `${frameIdx + 1}/${totalFrames}` : ""}
-                    </span>
-                  </div>
-                  <p style={{
-                    fontSize: "0.58rem", color: "rgba(255,255,255,0.38)",
-                    lineHeight: 1.6, margin: 0,
-                    display: "-webkit-box", WebkitBoxOrient: "vertical",
-                    WebkitLineClamp: 3, overflow: "hidden",
-                  } as React.CSSProperties}>
-                    {frame?.narration ?? "Select a frame to read the analysis."}
-                  </p>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            {/* ── SECTION 4: Player Card ── */}
-            {profile && playerName && (
-              <>
-                <DR />
-                <div style={{ padding: "0 18px" }}>
-                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)", marginBottom: 10 }}>
-                    PLAYER
-                  </div>
-
-                  {/* Name + team */}
-                  <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "rgba(255,255,255,0.88)", lineHeight: 1.15, marginBottom: 2 }}>
-                    {playerName}
-                  </div>
-                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.28)", marginBottom: 12 }}>
-                    {event.team.toUpperCase()}
-                  </div>
-
-                  {/* Radar chart — prominent, always visible */}
-                  <div style={{
-                    display: "flex", justifyContent: "center", alignItems: "center",
-                    margin: "0 0 16px",
-                    padding: "12px 0",
-                    background: "rgba(255,255,255,0.018)",
-                    borderRadius: 4,
-                    border: "1px solid rgba(255,255,255,0.04)",
-                  }}>
-                    <RadarChart
-                      values={[profile.stats.influence, profile.stats.discipline, profile.stats.involvement, profile.stats.pressure, profile.stats.impact]}
-                      color={tc}
-                    />
-                  </div>
-
-                  {/* Stat bars — three primary */}
-                  <StatRow label="INFLUENCE"  value={profile.stats.influence}  color={tc} />
-                  <StatRow label="DISCIPLINE" value={profile.stats.discipline} color={tc} />
-                  <StatRow label="IMPACT"     value={profile.stats.impact}     color={tc} />
-
-                  {/* Full dossier toggle */}
-                  <button onClick={() => setDossierOpen(o => !o)} style={{
-                    background: "none", border: "none", cursor: "none",
-                    color: "rgba(255,255,255,0.22)", fontFamily: "inherit",
-                    fontSize: "0.3rem", letterSpacing: "0.24em",
-                    padding: "8px 0 0", display: "flex", alignItems: "center", gap: 6,
-                  }}>
-                    <span style={{
-                      display: "inline-block", width: 10, height: 1,
-                      background: "rgba(255,255,255,0.15)",
-                    }} />
-                    {dossierOpen ? "COLLAPSE" : "FULL DOSSIER"}
-                  </button>
-
-                  <AnimatePresence>
-                    {dossierOpen && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.24 }}
-                        style={{ overflow: "hidden" }}>
-                        <div style={{ paddingTop: 12 }}>
-                          {/* All 5 stats */}
-                          <StatRow label="INVOLVEMENT" value={profile.stats.involvement} color={tc} />
-                          <StatRow label="PRESSURE"    value={profile.stats.pressure}    color={tc} />
-
-                          {/* Dossier list */}
-                          <div style={{ fontSize: "0.3rem", letterSpacing: "0.24em", color: "rgba(255,255,255,0.2)", marginBottom: 8 }}>
-                            MATCH EVENTS
-                          </div>
-                          {profile.events.length === 0 ? (
-                            <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,0.2)" }}>No events.</div>
-                          ) : profile.events.map((e, i) => (
-                            <div key={i} style={{
-                              display: "flex", gap: 8, alignItems: "center",
-                              padding: "5px 0",
-                              borderBottom: i < profile.events.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
-                            }}>
-                              <span style={{ fontSize: "0.72rem", fontWeight: 800, color: e.color, minWidth: 26 }}>
-                                {e.minute}′
-                              </span>
-                              <span style={{ fontSize: "0.52rem", color: "rgba(255,255,255,0.48)" }}>
-                                {TYPE_ICON[e.eventType]} {e.eventType === "substitution"
-                                  ? (e.player === playerName ? `Off — ${e.playerIn} on` : `On for ${e.playerOut}`)
-                                  : e.eventType}
-                              </span>
-                              {e.isKey && <span style={{ fontSize: "0.45rem", color: "#FFD700" }}>★</span>}
-                            </div>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </>
-            )}
-
-            {/* ── SECTION 5: Match Metadata ── */}
-            <DR />
-            <div style={{ padding: "0 18px 20px" }}>
-              <div style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)", marginBottom: 8 }}>
-                MATCH
-              </div>
-              <div style={{ fontSize: "0.62rem", fontWeight: 700, color: "rgba(255,255,255,0.55)", marginBottom: 3 }}>
-                {meta.stage}
-              </div>
-              <div style={{ fontSize: "0.52rem", color: "rgba(255,255,255,0.28)" }}>
-                {meta.venue ?? `${meta.home.name} vs ${meta.away.name}`}
-              </div>
-              <div style={{ fontSize: "0.32rem", letterSpacing: "0.12em", color: "rgba(255,255,255,0.18)", marginTop: 3 }}>
-                {meta.date}
-              </div>
-            </div>
           </motion.div>
         ) : (
-          <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, gap: 12 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.08)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "1.1rem", opacity: 0.25,
-            }}>⚽</div>
-            <div style={{ fontSize: "0.3rem", letterSpacing: "0.3em", color: "rgba(255,255,255,0.16)", textAlign: "center", lineHeight: 2 }}>
-              SELECT AN EVENT<br />TO OPEN DOSSIER
+          <motion.div key="empty-g" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 32 }}>
+            <div style={{ fontSize: "0.56rem", fontWeight: 700, letterSpacing: "0.3em", color: "rgba(255,255,255,0.1)" }}>
+              IBM GRANITE
+            </div>
+            <div style={{ fontSize: "0.3rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.1)", textAlign: "center", lineHeight: 2 }}>
+              REFEREE ASSISTANT<br />SELECT AN EVENT TO BEGIN
             </div>
           </motion.div>
         )}
@@ -1461,13 +1311,128 @@ function ExplanationPanel({
   );
 }
 
-// kept for legacy compat — no longer rendered but type-safe to reference
-function HR() { return <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "13px 0" }} />; }
-function Sect({ label, children }: { label: string; children: React.ReactNode }) {
+// ─── Player Intelligence Panel — far right ────────────────────────────────────
+function PlayerPanel({
+  event, allEvents, meta, homeColor,
+}: {
+  event?: PitchEvent;
+  allEvents: PitchEvent[];
+  meta: MatchMeta;
+  homeColor: string;
+}) {
+  const tc = event?.color ?? homeColor;
+  const playerName = event?.player ?? (event?.eventType === "substitution" ? event?.playerIn : undefined);
+  const profile = playerName ? computePlayer(playerName, allEvents) : null;
+
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: "0.37rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.2)", marginBottom: 7 }}>{label}</div>
-      {children}
+    <div style={{
+      width: 210, flexShrink: 0, display: "flex", flexDirection: "column",
+      borderLeft: "1px solid rgba(255,255,255,0.052)",
+      overflowY: "auto", scrollbarWidth: "none",
+    }}>
+      {/* Panel header */}
+      <div style={{
+        height: 40, display: "flex", alignItems: "center", padding: "0 16px", flexShrink: 0,
+        borderBottom: "1px solid rgba(255,255,255,0.04)",
+      }}>
+        <span style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)" }}>
+          PLAYER INTELLIGENCE
+        </span>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {profile && playerName && event ? (
+          <motion.div key={`pi-${playerName}`}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
+            style={{ display: "flex", flexDirection: "column" }}>
+
+            {/* Player identity */}
+            <div style={{ padding: "14px 16px 10px" }}>
+              <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "rgba(255,255,255,0.88)", lineHeight: 1.15, marginBottom: 2 }}>
+                {playerName}
+              </div>
+              <div style={{ fontSize: "0.28rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.28)" }}>
+                {event.team.toUpperCase()}
+              </div>
+            </div>
+
+            {/* Radar — full-width card */}
+            <div style={{
+              margin: "0 12px 12px",
+              padding: "10px 0 6px",
+              display: "flex", justifyContent: "center",
+              background: "rgba(255,255,255,0.02)",
+              border: "1px solid rgba(255,255,255,0.05)",
+              borderRadius: 3,
+            }}>
+              <RadarChart
+                values={[profile.stats.influence, profile.stats.discipline, profile.stats.involvement, profile.stats.pressure, profile.stats.impact]}
+                color={tc}
+              />
+            </div>
+
+            {/* All 5 stat bars — compact, no toggle */}
+            <div style={{ padding: "0 16px 10px" }}>
+              <StatRow label="INFLUENCE"   value={profile.stats.influence}   color={tc} />
+              <StatRow label="DISCIPLINE"  value={profile.stats.discipline}  color={tc} />
+              <StatRow label="IMPACT"      value={profile.stats.impact}      color={tc} />
+              <StatRow label="INVOLVEMENT" value={profile.stats.involvement} color={tc} />
+              <StatRow label="PRESSURE"    value={profile.stats.pressure}    color={tc} />
+            </div>
+
+            {/* Match events (compact) */}
+            {profile.events.length > 0 && (
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)", padding: "10px 16px 0" }}>
+                <div style={{ fontSize: "0.26rem", letterSpacing: "0.24em", color: "rgba(255,255,255,0.16)", marginBottom: 7 }}>
+                  MATCH EVENTS
+                </div>
+                {profile.events.map((e, i) => (
+                  <div key={i} style={{
+                    display: "flex", gap: 7, alignItems: "center", padding: "4px 0",
+                    borderBottom: i < profile.events.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                  }}>
+                    <span style={{ fontSize: "0.66rem", fontWeight: 800, color: e.color, minWidth: 22 }}>{e.minute}′</span>
+                    <span style={{ fontSize: "0.48rem", color: "rgba(255,255,255,0.42)", lineHeight: 1.3 }}>
+                      {TYPE_ICON[e.eventType]} {e.eventType === "substitution"
+                        ? (e.player === playerName ? `Off` : `On`)
+                        : e.eventType}
+                    </span>
+                    {e.isKey && <span style={{ fontSize: "0.4rem", color: "#FFD700" }}>★</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Match metadata */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.04)", padding: "10px 16px 16px", marginTop: 10 }}>
+              <div style={{ fontSize: "0.26rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.16)", marginBottom: 5 }}>MATCH</div>
+              <div style={{ fontSize: "0.58rem", fontWeight: 700, color: "rgba(255,255,255,0.46)", marginBottom: 2 }}>{meta.stage}</div>
+              <div style={{ fontSize: "0.48rem", color: "rgba(255,255,255,0.24)", lineHeight: 1.4 }}>
+                {meta.venue ?? `${meta.home.name} vs ${meta.away.name}`}
+              </div>
+              <div style={{ fontSize: "0.26rem", letterSpacing: "0.1em", color: "rgba(255,255,255,0.14)", marginTop: 3 }}>{meta.date}</div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div key="pi-empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "14px 16px" }}>
+              <div style={{ fontSize: "0.26rem", letterSpacing: "0.26em", color: "rgba(255,255,255,0.16)", marginBottom: 5 }}>MATCH</div>
+              <div style={{ fontSize: "0.58rem", fontWeight: 700, color: "rgba(255,255,255,0.46)", marginBottom: 2 }}>{meta.stage}</div>
+              <div style={{ fontSize: "0.48rem", color: "rgba(255,255,255,0.24)" }}>
+                {meta.venue ?? `${meta.home.name} vs ${meta.away.name}`}
+              </div>
+              <div style={{ fontSize: "0.26rem", letterSpacing: "0.1em", color: "rgba(255,255,255,0.14)", marginTop: 3 }}>{meta.date}</div>
+            </div>
+            <div style={{ padding: "24px 16px", textAlign: "center" }}>
+              <div style={{ fontSize: "0.28rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.1)", lineHeight: 2 }}>
+                NO PLAYER<br />DATA
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1551,7 +1516,7 @@ function generateGraniteReply(ev: PitchEvent, query: string): string {
   return `Granite analysis at ${ev.minute}′: this type of incident (${ev.eventType}) aligns with standard decision-making frameworks. The referee's real-time assessment — confirmed by assistant referee positioning — indicates the correct call was applied under current Laws of the Game.`;
 }
 
-function GraniteAssistant({ event }: { event: PitchEvent }) {
+function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }) {
   const [msgs, setMsgs] = useState<GMsg[]>([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -1590,83 +1555,81 @@ function GraniteAssistant({ event }: { event: PitchEvent }) {
     }, 700 + Math.random() * 400);
   };
 
-  return (
-    <div>
-      {/* Section header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: "0.34rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.22)" }}>IBM GRANITE</span>
-        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${tc}30, transparent)` }} />
-        <span style={{ fontSize: "0.28rem", letterSpacing: "0.18em", color: tc, opacity: 0.6 }}>REFEREE ASSISTANT</span>
-      </div>
+  const QUICK_BTNS = [
+    { id: "why",       label: "Why this decision?" },
+    { id: "law",       label: "Applicable law"     },
+    { id: "incidents", label: "Similar incidents"  },
+    { id: "checklist", label: "Referee checklist"  },
+  ];
 
-      {/* Message thread */}
-      <div ref={scrollRef} style={{
-        maxHeight: 260, overflowY: "auto",
-        display: "flex", flexDirection: "column", gap: 7,
-        marginBottom: 12,
-        scrollbarWidth: "none",
-      }}>
-        <AnimatePresence initial={false}>
-          {msgs.map(m => (
-            <motion.div key={m.id}
-              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.18 }}
-              style={{
-                padding: m.role === "assistant" ? "10px 12px" : "5px 0 5px 4px",
-                background: m.role === "assistant" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.015)",
-                borderLeft: m.role === "assistant" ? `2px solid ${tc}66` : `1px solid rgba(255,255,255,0.1)`,
-                borderRadius: m.role === "assistant" ? "0 4px 4px 0" : "0 3px 3px 0",
-              }}>
-              {m.role === "assistant" && (
-                <div style={{ fontSize: "0.26rem", letterSpacing: "0.22em", color: tc, opacity: 0.8, marginBottom: 5 }}>GRANITE</div>
-              )}
-              {m.role === "user" && (
-                <div style={{ fontSize: "0.24rem", letterSpacing: "0.18em", color: "rgba(255,255,255,0.28)", marginBottom: 4 }}>YOU</div>
-              )}
-              <p style={{
-                fontSize: "0.64rem",
-                color: m.role === "assistant" ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.4)",
-                margin: 0, lineHeight: 1.68,
-                whiteSpace: "pre-line",
-              }}>{m.text}</p>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        {thinking && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            style={{ padding: "6px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 2 }}>
-            <motion.span
-              animate={{ opacity: [0.3, 0.9, 0.3] }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-              style={{ fontSize: "0.52rem", color: tc, letterSpacing: "0.12em" }}>
-              ANALYZING…
-            </motion.span>
+  const msgThread = (
+    <div ref={scrollRef} style={{
+      flex: flex ? 1 : undefined,
+      maxHeight: flex ? undefined : 260,
+      overflowY: "auto",
+      display: "flex", flexDirection: "column", gap: 8,
+      padding: flex ? "0 20px" : "0",
+      scrollbarWidth: "none",
+    }}>
+      <AnimatePresence initial={false}>
+        {msgs.map(m => (
+          <motion.div key={m.id}
+            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+            style={{
+              padding: m.role === "assistant" ? "11px 14px" : "6px 4px",
+              background: m.role === "assistant" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.012)",
+              borderLeft: m.role === "assistant" ? `2px solid ${tc}70` : `1px solid rgba(255,255,255,0.1)`,
+              borderRadius: m.role === "assistant" ? "0 4px 4px 0" : "0 3px 3px 0",
+            }}>
+            {m.role === "assistant" && (
+              <div style={{ fontSize: "0.26rem", letterSpacing: "0.22em", color: tc, opacity: 0.85, marginBottom: 6 }}>GRANITE</div>
+            )}
+            {m.role === "user" && (
+              <div style={{ fontSize: "0.24rem", letterSpacing: "0.18em", color: "rgba(255,255,255,0.28)", marginBottom: 4 }}>YOU</div>
+            )}
+            <p style={{
+              fontSize: flex ? "0.68rem" : "0.64rem",
+              color: m.role === "assistant" ? "rgba(255,255,255,0.68)" : "rgba(255,255,255,0.42)",
+              margin: 0, lineHeight: 1.7, whiteSpace: "pre-line",
+            }}>{m.text}</p>
           </motion.div>
-        )}
-      </div>
+        ))}
+      </AnimatePresence>
+      {thinking && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          style={{ padding: "8px 14px", background: "rgba(255,255,255,0.025)", borderRadius: 3 }}>
+          <motion.span animate={{ opacity: [0.3, 0.9, 0.3] }} transition={{ duration: 1.2, repeat: Infinity }}
+            style={{ fontSize: "0.55rem", color: tc, letterSpacing: "0.14em" }}>
+            ANALYZING…
+          </motion.span>
+        </motion.div>
+      )}
+    </div>
+  );
 
-      {/* Quick actions */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 12 }}>
-        {[
-          { id: "why",       label: "Why this decision?" },
-          { id: "law",       label: "Applicable law"     },
-          { id: "incidents", label: "Similar incidents"  },
-          { id: "checklist", label: "Referee checklist"  },
-        ].map(qa => (
+  const actionsAndInput = (
+    <div style={{
+      flexShrink: 0,
+      padding: flex ? "12px 20px 16px" : "0",
+      borderTop: flex ? "1px solid rgba(255,255,255,0.052)" : "none",
+      marginTop: flex ? 0 : 12,
+    }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+        {QUICK_BTNS.map(qa => (
           <button key={qa.id} onClick={() => handleQuick(qa.id)} style={{
-            background: "rgba(255,255,255,0.045)",
-            border: `1px solid ${tc}38`,
+            background: "rgba(255,255,255,0.04)",
+            border: `1px solid ${tc}35`,
             borderRadius: 2, cursor: "none",
-            fontFamily: "inherit", fontSize: "0.32rem",
+            fontFamily: "inherit",
+            fontSize: flex ? "0.34rem" : "0.32rem",
             letterSpacing: "0.1em",
-            color: "rgba(255,255,255,0.5)",
-            padding: "5px 10px",
+            color: "rgba(255,255,255,0.52)",
+            padding: flex ? "6px 11px" : "5px 10px",
             transition: "all 0.1s",
           }}>{qa.label}</button>
         ))}
       </div>
-
-      {/* Chat input */}
       <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
         <input
           value={input}
@@ -1675,27 +1638,46 @@ function GraniteAssistant({ event }: { event: PitchEvent }) {
           placeholder="Ask Granite about this incident…"
           style={{
             flex: 1,
-            background: "rgba(255,255,255,0.04)",
+            background: "rgba(255,255,255,0.045)",
             border: "1px solid rgba(255,255,255,0.07)",
-            borderBottom: `2px solid ${tc}50`,
+            borderBottom: `2px solid ${tc}55`,
             borderRadius: "3px 3px 0 0",
-            padding: "8px 10px",
-            color: "rgba(255,255,255,0.72)",
+            padding: flex ? "9px 12px" : "8px 10px",
+            color: "rgba(255,255,255,0.75)",
             fontFamily: "inherit",
-            fontSize: "0.64rem",
+            fontSize: flex ? "0.66rem" : "0.64rem",
             letterSpacing: "0.02em",
-            outline: "none",
-            cursor: "none",
+            outline: "none", cursor: "none",
           }}
         />
         <button onClick={handleSend} style={{
           background: `${tc}22`, border: `1px solid ${tc}45`,
           borderRadius: 3, cursor: "none",
           color: tc, fontFamily: "inherit",
-          fontSize: "0.85rem", padding: "0 14px",
-          flexShrink: 0,
+          fontSize: "0.9rem", padding: "0 16px", flexShrink: 0,
         }}>→</button>
       </div>
+    </div>
+  );
+
+  if (flex) {
+    return (
+      <>
+        {msgThread}
+        {actionsAndInput}
+      </>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: "0.34rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.22)" }}>IBM GRANITE</span>
+        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${tc}30, transparent)` }} />
+        <span style={{ fontSize: "0.28rem", letterSpacing: "0.18em", color: tc, opacity: 0.6 }}>REFEREE ASSISTANT</span>
+      </div>
+      {msgThread}
+      {actionsAndInput}
     </div>
   );
 }
@@ -1859,16 +1841,20 @@ export default function MatchStoryScreen({
           />
         </div>
 
-        {/* RIGHT — Event Dossier */}
-        <ExplanationPanel
+        {/* RIGHT-CENTER — IBM Granite Referee Assistant */}
+        <GranitePanel
           event={activeEvent}
           frame={currentFrame}
           frameIdx={frameIdx}
           totalFrames={frames.length}
-          allEvents={pitchEvents}
-          narrative={narrative}
-          meta={meta}
           perspective={perspective}
+        />
+
+        {/* FAR RIGHT — Player Intelligence */}
+        <PlayerPanel
+          event={activeEvent}
+          allEvents={pitchEvents}
+          meta={meta}
           homeColor={homeColor}
         />
       </div>
