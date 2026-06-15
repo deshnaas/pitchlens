@@ -1,590 +1,1047 @@
 "use client";
 
-// PitchLens — Match Story Screen
-// Same structure. Same content. Cinematic motion layer added throughout.
-// Left: match narrative with title reveal, progressive paragraphs, parallax drift.
-// Right: timeline with drawing spine, pulsing nodes, staggered chapters, click portal.
+// PitchLens — Investigation Workspace
+//
+// Three-panel investigation room.
+// LEFT:   All match events — scrollable, searchable, every event visible.
+// CENTER: Interactive football pitch — events as markers, click to investigate.
+// RIGHT:  Explanation panel — what happened, why it mattered, role perspective.
+//
+// The pitch is the hero. Events are navigation. The right panel is understanding.
 
-import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { TEAM_REGISTRY } from "@/lib/matchData";
-import type { MatchMeta } from "@/lib/matchData";
+import type { MatchMeta, RawEvent } from "@/lib/matchData";
 
+// ─── Public types ──────────────────────────────────────────────────────────────
 export type KeyMoment = {
-  id: string;
-  minute: number;
+  id: string; minute: number;
   type: "goal" | "substitution" | "card" | "incident";
-  team: string;
-  icon: string;
-  title: string;
-  context: string;
+  team: string; icon: string; title: string; context: string;
 };
 
+type Perspective = "referee" | "fan" | "supporter";
+
 interface Props {
-  matchId: string;
-  meta: MatchMeta;
-  moments: KeyMoment[];
-  narrative: string;
-  onMomentSelect: (moment: KeyMoment) => void;
+  matchId: string; meta: MatchMeta; moments: KeyMoment[];
+  rawEvents: RawEvent[]; narrative: string;
+  perspective?: Perspective;
   onBack: () => void;
+  onMomentSelect?: (moment: KeyMoment) => void;
 }
 
-// ─── Easing presets ────────────────────────────────────────────────────────────
-const EASE_OUT  = [0.16, 1, 0.3, 1] as const;
-const EASE_EXPO = [0.22, 1, 0.36, 1] as const;
+// ─── Internal event type ───────────────────────────────────────────────────────
+type PitchEvent = {
+  id: string;
+  eventType: string; minute: number; second: number;
+  team: string; player?: string; playerIn?: string; playerOut?: string;
+  isKey: boolean; keyMoment?: KeyMoment;
+  color: string;
+  // Pitch position (105 × 68 coordinate space)
+  x: number; y: number;
+  shooterX?: number; shooterY?: number; // for goals
+};
 
-export default function MatchStoryScreen({
-  matchId, meta, moments, narrative, onMomentSelect, onBack,
-}: Props) {
-  const [hoveredId,  setHoveredId]  = useState<string | null>(null);
-  const [clickingId, setClickingId] = useState<string | null>(null);
-  const [spineReady, setSpineReady] = useState(false);
+// ─── Seeded deterministic placement ───────────────────────────────────────────
+function h(seed: number): number {
+  const s = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
 
-  const homeColor = meta.home.color;
-  const awayColor = meta.away.color;
+function inferPos(ev: RawEvent, idx: number, meta: MatchMeta) {
+  const s = idx * 17 + ev.minute * 13 + (ev.second ?? 0) * 7;
+  const r = (n: number) => h(s + n * 2.618);
+  const isHome = ev.team === meta.home.name;
 
-  // Spine draws after cards begin entering
-  useEffect(() => {
-    const t = setTimeout(() => setSpineReady(true), 380);
-    return () => clearTimeout(t);
-  }, []);
+  switch (ev.event_type) {
+    case "goal": {
+      // Home attacks right → scores near x=105. Away scores near x=0.
+      const toRight = isHome;
+      const gX = toRight ? 103.5 : 1.5;
+      const dist = 7 + r(1) * 12;
+      const gy = 28 + r(2) * 12;
+      const sX = toRight ? gX - dist - 5 - r(3) * 9 : gX + dist + 5 + r(3) * 9;
+      const sY = 26 + r(4) * 16;
+      return { x: toRight ? gX - dist : gX + dist, y: gy, shooterX: sX, shooterY: sY };
+    }
+    case "foul":
+    case "Yellow Card":
+      return { x: 5 + r(1) * 95, y: 2 + r(2) * 64 };
+    case "substitution":
+      return { x: 38 + r(1) * 30, y: isHome ? 0.8 : 67.2 };
+    default:
+      return { x: 52.5, y: 34 };
+  }
+}
 
-  // Parallax mouse drift on left panel
-  const mX = useMotionValue(0);
-  const mY = useMotionValue(0);
-  const springConfig = { stiffness: 40, damping: 18, mass: 1.2 };
-  const panelX = useSpring(useTransform(mX, [0, 1], [-6, 6]),  springConfig);
-  const panelY = useSpring(useTransform(mY, [0, 1], [-4, 4]),  springConfig);
+function buildEvents(rawEvents: RawEvent[], moments: KeyMoment[], meta: MatchMeta): PitchEvent[] {
+  return [...rawEvents]
+    .sort((a, b) => (a.minute + (a.second ?? 0) / 60) - (b.minute + (b.second ?? 0) / 60))
+    .map((e, i) => {
+      const km = moments.find(m =>
+        Math.abs(m.minute - e.minute) <= 1 &&
+        (m.team === e.team || (m.type === "goal" && e.event_type === "goal") ||
+          (m.type === "card" && e.event_type === "Yellow Card"))
+      );
+      const tc = TEAM_REGISTRY[e.team]?.color ??
+        (e.team === meta.home.name ? meta.home.color : meta.away.color);
+      return {
+        id: `pe-${i}`,
+        eventType: e.event_type, minute: e.minute, second: e.second ?? 0,
+        team: e.team, player: e.player ?? e.player_in,
+        playerIn: e.player_in, playerOut: e.player_out,
+        isKey: e.event_type === "goal" || e.event_type === "Yellow Card" || !!km,
+        keyMoment: km, color: tc,
+        ...inferPos(e, i, meta),
+      };
+    });
+}
 
-  useEffect(() => {
-    const move = (e: MouseEvent) => {
-      mX.set(e.clientX / window.innerWidth);
-      mY.set(e.clientY / window.innerHeight);
-    };
-    window.addEventListener("mousemove", move);
-    return () => window.removeEventListener("mousemove", move);
-  }, [mX, mY]);
+// ─── Player radar stats (deterministic) ───────────────────────────────────────
+function playerStats(name: string): number[] {
+  const c = (i: number) => name.charCodeAt(i % name.length);
+  return [0, 1, 2, 3, 4].map(n =>
+    Math.round(42 + (Math.abs(Math.sin(c(n) * 37.1 + n * 19.3 + name.length * 7.7)) % 1) * 52)
+  );
+}
 
-  // Momentum split for the match flow bar
-  const homeEvents = moments.filter(m => m.team === meta.home.name).length;
-  const total      = Math.max(moments.length, 1);
-  const homePct    = Math.round((homeEvents / total) * 100);
+// ─── Radar chart ──────────────────────────────────────────────────────────────
+function RadarChart({ values, color }: { values: number[]; color: string }) {
+  const cx = 55, cy = 55, maxR = 40;
+  const labels = ["ATK", "DEF", "CRE", "TEC", "TAC"];
+  const ang = (i: number) => -Math.PI / 2 + (i * Math.PI * 2) / 5;
+  const pt = (v: number, i: number): [number, number] => {
+    const a = ang(i), r = (v / 100) * maxR;
+    return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  };
+  const gridRing = (frac: number) =>
+    labels.map((_, i) => { const a = ang(i), r = maxR * frac; return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`; }).join(" ");
 
-  // Click-to-investigate — portal flash then navigate
-  const handleClick = useCallback((moment: KeyMoment) => {
-    if (clickingId) return;
-    setClickingId(moment.id);
-    setTimeout(() => onMomentSelect(moment), 520);
-  }, [clickingId, onMomentSelect]);
-
-  const paragraphs = narrative.split("\n\n").filter(Boolean);
+  const valuePath = `M ${values.map((v, i) => pt(v, i).join(",")).join(" L ")} Z`;
 
   return (
-    <div
-      className="fixed inset-0 overflow-hidden"
-      style={{ background: "#04080f", fontFamily: "'Barlow Condensed', sans-serif" }}
-    >
-      {/* Top edge accent — draws in */}
-      <motion.div
-        className="absolute top-0 left-0 right-0 h-px z-40"
-        style={{ background: `linear-gradient(90deg,transparent,${homeColor}90,${awayColor}90,transparent)` }}
-        initial={{ scaleX: 0, opacity: 0 }}
-        animate={{ scaleX: 1, opacity: 1 }}
-        transition={{ duration: 1.1, delay: 0.1, ease: EASE_EXPO }}
-      />
+    <svg width="110" height="110" viewBox="0 0 110 110">
+      {[0.25, 0.5, 0.75, 1].map(f => (
+        <polygon key={f} points={gridRing(f)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="0.8" />
+      ))}
+      {labels.map((_, i) => {
+        const [x, y] = pt(100, i);
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth="0.8" />;
+      })}
+      <path d={valuePath} fill={`${color}33`} stroke={color} strokeWidth="1.3" />
+      {values.map((v, i) => { const [x, y] = pt(v, i); return <circle key={i} cx={x} cy={y} r="1.8" fill={color} />; })}
+      {labels.map((label, i) => {
+        const [x, y] = pt(118, i);
+        return (
+          <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle"
+            fill="rgba(255,255,255,0.3)" fontSize="6.5"
+            fontFamily="'Barlow Condensed',sans-serif" letterSpacing="0.04em">
+            {label}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
 
-      {/* Click portal overlay — expands from centre on investigation entry */}
-      <AnimatePresence>
-        {clickingId && (
-          <motion.div
-            key="portal"
-            initial={{ opacity: 0, scale: 0.2 }}
-            animate={{ opacity: [0, 0.55, 0.1], scale: [0.2, 1.6, 3] }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5, ease: EASE_EXPO }}
-            style={{
-              position: "fixed", inset: 0, zIndex: 100, pointerEvents: "none",
-              background: "radial-gradient(ellipse at center, rgba(0,180,255,0.18) 0%, transparent 65%)",
-            }}
+// ─── Football pitch ────────────────────────────────────────────────────────────
+const LS = { stroke: "rgba(255,255,255,0.28)", strokeWidth: "0.38", fill: "none" } as const;
+const L_ARC_Y1 = (34 - Math.sqrt(9.15 ** 2 - 5.5 ** 2)).toFixed(3);
+const L_ARC_Y2 = (34 + Math.sqrt(9.15 ** 2 - 5.5 ** 2)).toFixed(3);
+
+function PitchMarkings() {
+  return (
+    <g>
+      {/* Surface gradient def */}
+      <defs>
+        <radialGradient id="pitchGrad" cx="50%" cy="50%" r="60%">
+          <stop offset="0%"   stopColor="#0d2a14" />
+          <stop offset="70%"  stopColor="#091e0e" />
+          <stop offset="100%" stopColor="#060f08" />
+        </radialGradient>
+        <radialGradient id="pitchVignette" cx="50%" cy="50%" r="65%">
+          <stop offset="0%"   stopColor="transparent" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0.55)" />
+        </radialGradient>
+        <filter id="eventGlow">
+          <feGaussianBlur stdDeviation="1.2" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+
+      {/* Pitch surface */}
+      <rect x="0" y="0" width="105" height="68" fill="url(#pitchGrad)" rx="1" />
+
+      {/* Subtle alternating field stripes */}
+      {[0, 1, 2, 3, 4, 5, 6].map(i => (
+        <rect key={i} x={i * 15} y="0" width="15" height="68"
+          fill={i % 2 === 0 ? "rgba(255,255,255,0.018)" : "transparent"} />
+      ))}
+
+      {/* Vignette overlay */}
+      <rect x="-5" y="-4" width="117" height="76" fill="url(#pitchVignette)" />
+
+      {/* Pitch boundary */}
+      <rect x="0" y="0" width="105" height="68" {...LS} />
+
+      {/* Halfway line */}
+      <line x1="52.5" y1="0" x2="52.5" y2="68" {...LS} />
+
+      {/* Center circle + spot */}
+      <circle cx="52.5" cy="34" r="9.15" {...LS} />
+      <circle cx="52.5" cy="34" r="0.4" fill="rgba(255,255,255,0.28)" />
+
+      {/* Left penalty area */}
+      <rect x="0" y="13.84" width="16.5" height="40.32" {...LS} />
+      {/* Left goal area */}
+      <rect x="0" y="24.84" width="5.5" height="18.32" {...LS} />
+      {/* Left penalty arc */}
+      <path d={`M 16.5 ${L_ARC_Y1} A 9.15 9.15 0 0 1 16.5 ${L_ARC_Y2}`} {...LS} />
+      {/* Left penalty spot */}
+      <circle cx="11" cy="34" r="0.38" fill="rgba(255,255,255,0.28)" />
+      {/* Left goal */}
+      <rect x="-2.2" y="30.34" width="2.2" height="7.32"
+        fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.22)" strokeWidth="0.32" />
+
+      {/* Right penalty area */}
+      <rect x="88.5" y="13.84" width="16.5" height="40.32" {...LS} />
+      {/* Right goal area */}
+      <rect x="99.5" y="24.84" width="5.5" height="18.32" {...LS} />
+      {/* Right penalty arc */}
+      <path d={`M 88.5 ${L_ARC_Y1} A 9.15 9.15 0 0 0 88.5 ${L_ARC_Y2}`} {...LS} />
+      {/* Right penalty spot */}
+      <circle cx="94" cy="34" r="0.38" fill="rgba(255,255,255,0.28)" />
+      {/* Right goal */}
+      <rect x="105" y="30.34" width="2.2" height="7.32"
+        fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.22)" strokeWidth="0.32" />
+
+      {/* Corner arcs */}
+      <path d="M 1 0 A 1 1 0 0 0 0 1" {...LS} />
+      <path d="M 0 67 A 1 1 0 0 0 1 68" {...LS} />
+      <path d="M 104 0 A 1 1 0 0 1 105 1" {...LS} />
+      <path d="M 105 67 A 1 1 0 0 1 104 68" {...LS} />
+    </g>
+  );
+}
+
+// ─── Active event visualization ────────────────────────────────────────────────
+function ActiveViz({ ev, meta }: { ev: PitchEvent; meta: MatchMeta }) {
+  const tc = ev.color;
+  const isHome = ev.team === meta.home.name;
+
+  if (ev.eventType === "goal" && ev.shooterX !== undefined && ev.shooterY !== undefined) {
+    const gX = isHome ? 103.5 : 1.5;
+    return (
+      <g filter="url(#eventGlow)">
+        {/* Shot path (animated) */}
+        <motion.path
+          d={`M ${ev.shooterX} ${ev.shooterY} L ${ev.x} ${ev.y}`}
+          stroke={tc} strokeWidth="0.7" strokeDasharray="1.2 0.8" fill="none"
+          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+          transition={{ duration: 0.85, ease: "easeOut" }}
+        />
+        {/* Shooter */}
+        <circle cx={ev.shooterX} cy={ev.shooterY} r="2.4" fill={tc} stroke="white" strokeWidth="0.4" />
+        <text x={ev.shooterX} y={ev.shooterY - 3.8} textAnchor="middle"
+          fill="white" fontSize="2.4" fontFamily="'Barlow Condensed',sans-serif" fontWeight="700">
+          {ev.player?.split(" ").slice(-1)[0] ?? ev.player}
+        </text>
+        {/* Ball impact */}
+        <motion.circle cx={ev.x} cy={ev.y} r="1.6" fill="white"
+          initial={{ scale: 0 }} animate={{ scale: 1 }}
+          transition={{ delay: 0.7, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        />
+        {/* Goal flash */}
+        <motion.circle cx={gX} cy={34} r="5" fill={`${tc}18`} stroke={tc} strokeWidth="0.4"
+          initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.65, duration: 0.4 }}
+        />
+        <text x={gX} y={34.6} textAnchor="middle" dominantBaseline="middle" fontSize="4">⚽</text>
+      </g>
+    );
+  }
+
+  if (ev.eventType === "foul" || ev.eventType === "Yellow Card") {
+    const p1 = { x: ev.x - 3, y: ev.y }, p2 = { x: ev.x + 3, y: ev.y };
+    const isCard = ev.eventType === "Yellow Card";
+    return (
+      <g filter="url(#eventGlow)">
+        {/* Contact zone */}
+        <motion.circle cx={ev.x} cy={ev.y} r="6"
+          fill={`${tc}10`} stroke={isCard ? "#FFD700" : tc} strokeWidth="0.35" strokeDasharray="1.2 1"
+          initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ duration: 0.45 }}
+        />
+        {/* Players */}
+        <circle cx={p1.x} cy={p1.y} r="2.2" fill={tc} stroke="white" strokeWidth="0.35" />
+        <circle cx={p2.x} cy={p2.y} r="2.2" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.5)" strokeWidth="0.35" />
+        {/* ✕ */}
+        <text x={ev.x} y={ev.y + 0.8} textAnchor="middle" dominantBaseline="middle"
+          fill="rgba(255,80,80,0.95)" fontSize="4.5" fontWeight="900">✕</text>
+        {/* Player name */}
+        <text x={ev.x} y={ev.y - 8} textAnchor="middle"
+          fill={tc} fontSize="2.4" fontFamily="'Barlow Condensed',sans-serif" fontWeight="700">
+          {ev.player}
+        </text>
+        {/* Card */}
+        {isCard && (
+          <motion.rect x={ev.x - 1.2} y={ev.y - 15} width="2.4" height="3.4" rx="0.25"
+            fill="#FFD700" stroke="#FFA500" strokeWidth="0.18"
+            initial={{ y: ev.y - 9, opacity: 0 }} animate={{ y: ev.y - 15, opacity: 1 }}
+            transition={{ delay: 0.25, duration: 0.5 }}
           />
         )}
-      </AnimatePresence>
+      </g>
+    );
+  }
 
-      {/* ── Header ── */}
-      <motion.div
-        className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6"
-        style={{ height: 54, borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(4,8,15,0.96)", backdropFilter: "blur(8px)" }}
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.55, ease: EASE_OUT }}
+  if (ev.eventType === "substitution") {
+    const isTop = ev.y < 34;
+    const dy = isTop ? -4 : 4;
+    return (
+      <g filter="url(#eventGlow)">
+        <circle cx={ev.x - 3} cy={ev.y} r="2.2"
+          fill="rgba(80,220,120,0.25)" stroke="rgba(80,220,120,0.9)" strokeWidth="0.35" />
+        <circle cx={ev.x + 3} cy={ev.y} r="2.2"
+          fill="rgba(255,80,80,0.2)" stroke="rgba(255,80,80,0.8)" strokeWidth="0.35" />
+        <text x={ev.x - 3} y={ev.y + dy} textAnchor="middle"
+          fill="rgba(80,220,120,0.9)" fontSize="2.2" fontFamily="'Barlow Condensed',sans-serif">
+          ↑ {ev.playerIn?.split(" ").slice(-1)[0]}
+        </text>
+        <text x={ev.x + 3} y={ev.y + dy} textAnchor="middle"
+          fill="rgba(255,80,80,0.85)" fontSize="2.2" fontFamily="'Barlow Condensed',sans-serif">
+          ↓ {ev.playerOut?.split(" ").slice(-1)[0]}
+        </text>
+      </g>
+    );
+  }
+
+  return null;
+}
+
+// ─── Pitch view ────────────────────────────────────────────────────────────────
+function PitchView({
+  events, activeId, onSelect, meta,
+}: {
+  events: PitchEvent[]; activeId: string | null;
+  onSelect: (id: string) => void;
+  meta: MatchMeta;
+}) {
+  const active = events.find(e => e.id === activeId);
+
+  const markerR = (ev: PitchEvent) =>
+    ev.eventType === "goal" ? 1.9 : ev.eventType === "Yellow Card" ? 1.5 : ev.eventType === "substitution" ? 1.3 : 0.85;
+
+  return (
+    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <svg
+        viewBox="-5 -4 117 76"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}
       >
-        <motion.button
-          onClick={onBack}
-          style={{ color: "rgba(255,255,255,0.32)", cursor: "none", background: "none", border: "none", fontFamily: "inherit" }}
-          whileHover={{ color: "rgba(255,255,255,0.78)" }}
-        >
-          <span style={{ fontSize: "0.58rem", letterSpacing: "0.2em" }}>← ALL MATCHES</span>
-        </motion.button>
+        <PitchMarkings />
 
-        <div className="flex items-center gap-4">
-          <GradCode code={meta.home.code} color={homeColor} />
-          <div className="text-center">
-            <div style={{ color: "#fff", fontSize: "0.82rem", fontWeight: 800, letterSpacing: "0.1em" }}>{meta.headline}</div>
-            <div style={{ color: "rgba(255,255,255,0.28)", fontSize: "0.5rem", letterSpacing: "0.2em" }}>{meta.stage} · {meta.date}</div>
-          </div>
-          <GradCode code={meta.away.code} color={awayColor} />
+        {/* All event markers */}
+        {events.map(ev => {
+          const isActive = ev.id === activeId;
+          const r = markerR(ev);
+          const tc = ev.color;
+          const isGoal = ev.eventType === "goal";
+          const isCard = ev.eventType === "Yellow Card";
+
+          return (
+            <g key={ev.id} onClick={() => onSelect(ev.id)} style={{ cursor: "pointer" }}>
+              {/* Pulse ring for active */}
+              {isActive && (
+                <motion.circle cx={ev.x} cy={ev.y} r={r * 4.5}
+                  fill="none" stroke={tc} strokeWidth="0.35"
+                  animate={{ r: [r * 3.5, r * 5.5, r * 3.5], opacity: [0.5, 0, 0.5] }}
+                  transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                />
+              )}
+              {/* Hit area */}
+              <circle cx={ev.x} cy={ev.y} r={Math.max(r + 1.2, 2.5)} fill="transparent" />
+              {/* Marker */}
+              <circle
+                cx={ev.x} cy={ev.y}
+                r={isActive ? r * 1.8 : r}
+                fill={isCard ? "#FFD700" : isGoal ? tc : `${tc}${isActive ? "dd" : "99"}`}
+                stroke={isActive ? "white" : (isGoal ? "rgba(255,255,255,0.4)" : "none")}
+                strokeWidth={isActive ? "0.4" : "0.2"}
+                opacity={isActive ? 1 : 0.72}
+              />
+              {/* Goal icon */}
+              {isGoal && isActive && (
+                <text x={ev.x} y={ev.y + 0.6} textAnchor="middle" dominantBaseline="middle" fontSize="1.8">⚽</text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Active event overlay */}
+        <AnimatePresence mode="wait">
+          {active && (
+            <motion.g key={activeId}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <ActiveViz ev={active} meta={meta} />
+            </motion.g>
+          )}
+        </AnimatePresence>
+      </svg>
+    </div>
+  );
+}
+
+// ─── Event type label + icon ───────────────────────────────────────────────────
+const TYPE_ICON: Record<string, string> = { goal: "⚽", "Yellow Card": "🟨", substitution: "🔄", foul: "·" };
+const TYPE_LABEL: Record<string, string> = { goal: "GOAL", "Yellow Card": "CARD", substitution: "SUB", foul: "FOUL" };
+
+// ─── Left panel ───────────────────────────────────────────────────────────────
+function EventsPanel({
+  events, activeId, onSelect, query, onQuery, meta,
+  listRef, activeItemRef,
+}: {
+  events: PitchEvent[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  query: string; onQuery: (q: string) => void;
+  meta: MatchMeta;
+  listRef: React.RefObject<HTMLDivElement | null>;
+  activeItemRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const filtered = useMemo(() => {
+    if (!query) return events;
+    const q = query.toLowerCase();
+    return events.filter(e =>
+      [e.player, e.playerIn, e.playerOut, String(e.minute), e.eventType, e.team]
+        .some(v => v?.toLowerCase().includes(q))
+    );
+  }, [events, query]);
+
+  return (
+    <div style={{
+      width: 258, flexShrink: 0,
+      display: "flex", flexDirection: "column",
+      background: "rgba(4,8,20,0.88)",
+      backdropFilter: "blur(22px)",
+      borderRight: "1px solid rgba(255,255,255,0.06)",
+    }}>
+      {/* Panel header */}
+      <div style={{
+        padding: "14px 14px 10px",
+        borderBottom: "1px solid rgba(255,255,255,0.05)",
+        flexShrink: 0,
+      }}>
+        <div style={{
+          fontSize: "0.42rem", letterSpacing: "0.28em",
+          color: "rgba(255,255,255,0.28)", marginBottom: 10,
+        }}>
+          MATCH EVENTS · {events.length}
         </div>
-
-        <div style={{ fontSize: "0.55rem", letterSpacing: "0.22em", color: "rgba(0,212,255,0.35)" }}>PITCHLENS</div>
-      </motion.div>
-
-      {/* ── Two-column body ── */}
-      <div className="absolute" style={{ top: 54, left: 0, right: 0, bottom: 0, display: "flex" }}>
-
-        {/* ════ LEFT 38%: Match Narrative ════ */}
-        <motion.div
-          className="flex flex-col overflow-y-auto"
-          style={{
-            width: "38%",
-            borderRight: "1px solid rgba(255,255,255,0.07)",
-            padding: "40px 36px",
-            scrollbarWidth: "none",
-            background: "rgba(0,0,0,0.28)",
-            x: panelX,
-            y: panelY,
-          }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4 }}
-        >
-          {/* "THE STORY" label — fade in */}
-          <motion.div
-            style={{ fontSize: "0.48rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.22)", marginBottom: 14 }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            THE STORY
-          </motion.div>
-
-          {/* Headline — clip-path wipe left→right */}
-          <div style={{ overflow: "hidden", marginBottom: 6 }}>
-            <motion.h1
-              style={{
-                fontSize: "clamp(1.6rem, 3.5vw, 2.6rem)",
-                fontWeight: 900, color: "#fff",
-                lineHeight: 1.05, letterSpacing: "0.02em",
-              }}
-              initial={{ clipPath: "inset(0 100% 0 0)", opacity: 0.4 }}
-              animate={{ clipPath: "inset(0 0% 0 0)", opacity: 1 }}
-              transition={{ duration: 0.85, delay: 0.3, ease: EASE_EXPO }}
-            >
-              {meta.headline}
-            </motion.h1>
-          </div>
-
-          {/* Sub-headline wipe */}
-          <div style={{ overflow: "hidden", marginBottom: 20 }}>
-            <motion.div
-              style={{ fontSize: "0.8rem", fontWeight: 400, letterSpacing: "0.12em", color: "rgba(255,255,255,0.35)" }}
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.55, delay: 0.55, ease: EASE_OUT }}
-            >
-              {meta.subline}
-            </motion.div>
-          </div>
-
-          {/* Teams strip */}
-          <motion.div
-            className="flex items-center gap-3 mb-8"
-            initial={{ opacity: 0, x: -14 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.65, ease: EASE_OUT }}
-          >
-            <div style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "0.1em", color: homeColor }}>
-              {meta.home.name}
-            </div>
-            <div style={{ color: "rgba(255,255,255,0.2)", fontSize: "0.7rem" }}>vs</div>
-            <div style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "0.1em", color: awayColor }}>
-              {meta.away.name}
-            </div>
-          </motion.div>
-
-          {/* Narrative paragraphs — progressive reveal */}
-          {paragraphs.map((para, i) => (
-            <motion.p
-              key={i}
-              style={{ fontSize: "0.88rem", color: "rgba(255,255,255,0.65)", lineHeight: 1.78, marginBottom: 18, letterSpacing: "0.01em" }}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.7 + i * 0.14, ease: EASE_OUT }}
-            >
-              {para}
-            </motion.p>
-          ))}
-
-          {/* Venue + date footer */}
-          <motion.div
-            style={{ marginTop: "auto", paddingTop: 24, borderTop: "1px solid rgba(255,255,255,0.06)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.9 + paragraphs.length * 0.1 }}
-          >
-            <div style={{ fontSize: "0.52rem", color: "rgba(255,255,255,0.18)", letterSpacing: "0.18em" }}>{meta.venue}</div>
-            <div style={{ fontSize: "0.52rem", color: "rgba(255,255,255,0.18)", letterSpacing: "0.18em", marginTop: 4 }}>{meta.date} · FIFA WORLD CUP QATAR 2022</div>
-          </motion.div>
-        </motion.div>
-
-        {/* ════ RIGHT 62%: Key Moments Timeline ════ */}
-        <div
-          className="flex flex-col overflow-y-auto"
-          style={{ flex: 1, padding: "32px 40px 40px", scrollbarWidth: "none" }}
-        >
-          {/* Section header */}
-          <motion.div
-            style={{ marginBottom: 24 }}
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, delay: 0.1, ease: EASE_OUT }}
-          >
-            <div style={{ fontSize: "0.48rem", letterSpacing: "0.36em", color: "rgba(255,255,255,0.2)", marginBottom: 7 }}>
-              KEY MOMENTS
-            </div>
-            <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#fff", letterSpacing: "0.03em" }}>
-              Click a moment to investigate it.
-            </div>
-          </motion.div>
-
-          {/* ── Match Flow Bar ── */}
-          <MatchFlowBar
-            homeColor={homeColor}
-            awayColor={awayColor}
-            homeCode={meta.home.code}
-            awayCode={meta.away.code}
-            homePct={homePct}
+        {/* Search */}
+        <div style={{ position: "relative" }}>
+          <span style={{
+            position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+            fontSize: "0.7rem", color: "rgba(255,255,255,0.2)", pointerEvents: "none",
+          }}>
+            ⌕
+          </span>
+          <input
+            value={query}
+            onChange={e => onQuery(e.target.value)}
+            placeholder="Search events…"
+            style={{
+              width: "100%", boxSizing: "border-box",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 4, padding: "6px 8px 6px 24px",
+              color: "rgba(255,255,255,0.75)",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "0.72rem", letterSpacing: "0.04em",
+              outline: "none", cursor: "none",
+            }}
           />
-
-          {/* ── Timeline ── */}
-          <div style={{ position: "relative", marginTop: 24 }}>
-
-            {/* Spine — draws itself downward */}
-            <div style={{
-              position: "absolute", left: 28, top: 0, bottom: 0, width: 1,
-              background: `linear-gradient(to bottom, transparent, rgba(255,255,255,0.08) 8%, rgba(255,255,255,0.08) 92%, transparent)`,
-              overflow: "hidden",
-            }}>
-              <motion.div
-                style={{ position: "absolute", inset: 0, transformOrigin: "top center" }}
-                initial={{ scaleY: 0 }}
-                animate={{ scaleY: spineReady ? 1 : 0 }}
-                transition={{ duration: 1.4, ease: EASE_EXPO }}
-              >
-                <div style={{
-                  position: "absolute", inset: 0,
-                  background: `linear-gradient(to bottom, ${homeColor}55, ${awayColor}55)`,
-                }} />
-              </motion.div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {moments.map((moment, i) => {
-                const isHov     = hoveredId === moment.id;
-                const isClicking = clickingId === moment.id;
-                const teamColor = TEAM_REGISTRY[moment.team]?.color ?? "#00d4ff";
-                const isGoal    = moment.type === "goal";
-
-                return (
-                  <motion.div
-                    key={moment.id}
-                    initial={{ opacity: 0, x: 28, filter: "blur(5px)" }}
-                    animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                    transition={{ duration: 0.55, delay: 0.2 + i * 0.08, ease: EASE_OUT }}
-                  >
-                    <div style={{ position: "relative", paddingLeft: 58 }}>
-
-                      {/* Pulse ring on timeline node */}
-                      <motion.div
-                        style={{
-                          position: "absolute", left: 28 - 10, top: 22 - 10,
-                          width: 20, height: 20, borderRadius: "50%",
-                          border: `1px solid ${teamColor}`,
-                          pointerEvents: "none",
-                        }}
-                        animate={{ scale: [1, 2, 1], opacity: [0.5, 0, 0.5] }}
-                        transition={{
-                          duration: 2.6, repeat: Infinity,
-                          delay: 0.4 + i * 0.35, ease: "easeOut",
-                        }}
-                      />
-
-                      {/* Node dot */}
-                      <motion.div
-                        style={{
-                          position: "absolute",
-                          left: 22,
-                          top: 22,
-                          width: isGoal ? 14 : 10,
-                          height: isGoal ? 14 : 10,
-                          marginLeft: isGoal ? -2 : 0,
-                          marginTop: isGoal ? -2 : 0,
-                          borderRadius: "50%",
-                          background: (isHov || isClicking) ? teamColor : `${teamColor}88`,
-                          border: `1px solid ${teamColor}`,
-                          zIndex: 2,
-                        }}
-                        animate={{
-                          boxShadow: isHov || isClicking
-                            ? [`0 0 0px ${teamColor}`, `0 0 16px ${teamColor}bb`, `0 0 6px ${teamColor}88`]
-                            : `0 0 0px transparent`,
-                        }}
-                        transition={{ duration: 0.5 }}
-                      />
-
-                      {/* Event card */}
-                      <motion.button
-                        onClick={() => handleClick(moment)}
-                        onHoverStart={() => setHoveredId(moment.id)}
-                        onHoverEnd={() => setHoveredId(null)}
-                        style={{
-                          display: "flex", flexDirection: "column", width: "100%",
-                          padding: 0, background: "none", border: "none",
-                          cursor: "none", textAlign: "left", fontFamily: "inherit",
-                        }}
-                        animate={{
-                          y: isHov ? -3 : 0,
-                          scale: isClicking ? 1.025 : 1,
-                        }}
-                        transition={{ duration: 0.25, ease: EASE_OUT }}
-                      >
-                        <motion.div
-                          animate={{
-                            background: isClicking
-                              ? `linear-gradient(135deg, ${teamColor}38 0%, rgba(4,8,22,0.96) 100%)`
-                              : isHov
-                              ? `linear-gradient(135deg, ${teamColor}1a 0%, rgba(4,8,22,0.9) 100%)`
-                              : "rgba(4,8,22,0.55)",
-                            borderColor: isClicking
-                              ? `${teamColor}88`
-                              : isHov
-                              ? `${teamColor}44`
-                              : "rgba(255,255,255,0.07)",
-                          }}
-                          transition={{ duration: 0.22 }}
-                          style={{
-                            borderRadius: 4,
-                            border: "1px solid rgba(255,255,255,0.07)",
-                            overflow: "hidden",
-                            backdropFilter: "blur(8px)",
-                            boxShadow: isHov
-                              ? `0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px ${teamColor}22`
-                              : "0 2px 8px rgba(0,0,0,0.35)",
-                            transition: "box-shadow 0.3s ease",
-                          }}
-                        >
-                          <div style={{ display: "flex", gap: 0 }}>
-                            {/* Left color strip */}
-                            <motion.div
-                              animate={{ opacity: isHov || isClicking ? 1 : 0.4 }}
-                              style={{
-                                background: isGoal
-                                  ? `linear-gradient(180deg, ${teamColor}, ${teamColor}88)`
-                                  : teamColor,
-                                flexShrink: 0, width: isHov || isClicking ? 4 : 3,
-                                transition: "width 0.25s ease",
-                              }}
-                            />
-
-                            {/* Content */}
-                            <div style={{ flex: 1, padding: "14px 18px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                                {/* Minute */}
-                                <motion.div
-                                  style={{
-                                    fontSize: "1.15rem", fontWeight: 900,
-                                    letterSpacing: "0.04em", lineHeight: 1, minWidth: 42,
-                                  }}
-                                  animate={{ color: isHov || isClicking ? teamColor : `${teamColor}cc` }}
-                                  transition={{ duration: 0.2 }}
-                                >
-                                  {moment.minute}&apos;
-                                </motion.div>
-                                {/* Icon */}
-                                <motion.div
-                                  style={{ fontSize: "1.1rem" }}
-                                  animate={{ scale: isHov ? 1.15 : 1 }}
-                                  transition={{ duration: 0.2 }}
-                                >
-                                  {moment.icon}
-                                </motion.div>
-                                {/* Team badge */}
-                                <div style={{
-                                  fontSize: "0.52rem", letterSpacing: "0.2em",
-                                  color: "rgba(255,255,255,0.3)",
-                                  padding: "2px 6px",
-                                  background: `${teamColor}18`,
-                                  borderRadius: 2,
-                                }}>
-                                  {TEAM_REGISTRY[moment.team]?.code ?? moment.team}
-                                </div>
-
-                                {/* Type label for non-goal events */}
-                                {!isGoal && (
-                                  <div style={{
-                                    fontSize: "0.42rem", letterSpacing: "0.18em",
-                                    color: "rgba(255,255,255,0.18)",
-                                    marginLeft: "auto",
-                                    textTransform: "uppercase",
-                                  }}>
-                                    {moment.type}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Title */}
-                              <motion.div
-                                style={{
-                                  fontSize: isGoal ? "1.15rem" : "0.95rem",
-                                  fontWeight: isGoal ? 800 : 700,
-                                  letterSpacing: "0.02em",
-                                  lineHeight: 1.15,
-                                }}
-                                animate={{
-                                  color: isClicking ? "#fff" : isHov ? "#fff" : "rgba(255,255,255,0.84)",
-                                  textShadow: isClicking
-                                    ? `0 0 24px ${teamColor}88`
-                                    : isGoal && isHov
-                                    ? `0 0 12px ${teamColor}44`
-                                    : "none",
-                                }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                {moment.title}
-                              </motion.div>
-
-                              {/* Context — reveal on hover or always for goals */}
-                              <AnimatePresence>
-                                {(isHov || isGoal || isClicking) && (
-                                  <motion.div
-                                    initial={{ opacity: 0, height: 0, y: -4 }}
-                                    animate={{ opacity: 1, height: "auto", y: 0 }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.22, ease: EASE_OUT }}
-                                  >
-                                    <div style={{
-                                      fontSize: "0.68rem",
-                                      color: "rgba(255,255,255,0.46)",
-                                      lineHeight: 1.55,
-                                      marginTop: 7,
-                                      letterSpacing: "0.02em",
-                                    }}>
-                                      {moment.context}
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-
-                            {/* Investigate CTA — slides in on hover */}
-                            <motion.div
-                              initial={false}
-                              animate={{
-                                opacity: isHov || isClicking ? 1 : 0,
-                                x: isHov || isClicking ? 0 : 8,
-                              }}
-                              transition={{ duration: 0.2 }}
-                              style={{
-                                flexShrink: 0,
-                                display: "flex", alignItems: "center",
-                                paddingRight: 18,
-                                fontSize: "0.52rem",
-                                letterSpacing: "0.2em",
-                                color: teamColor,
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {isClicking ? "ENTERING →" : "INVESTIGATE →"}
-                            </motion.div>
-                          </div>
-
-                          {/* Bottom glow line on hover */}
-                          <motion.div
-                            animate={{ scaleX: isHov || isClicking ? 1 : 0, opacity: isHov || isClicking ? 1 : 0 }}
-                            initial={{ scaleX: 0, opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                            style={{
-                              height: "0.5px",
-                              background: `linear-gradient(90deg, ${teamColor}00, ${teamColor}88, ${teamColor}00)`,
-                              transformOrigin: "left center",
-                            }}
-                          />
-                        </motion.div>
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </div>
         </div>
+      </div>
+
+      {/* Event list */}
+      <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+        {filtered.map(ev => {
+          const isActive = ev.id === activeId;
+          const isGoal = ev.eventType === "goal";
+          const isCard = ev.eventType === "Yellow Card";
+          const isSub  = ev.eventType === "substitution";
+          const isFoul = ev.eventType === "foul";
+          const tc = ev.color;
+          const label = ev.keyMoment?.title ??
+            (isSub ? `${ev.playerIn} for ${ev.playerOut}` : ev.player ?? ev.team);
+
+          return (
+            <motion.button
+              key={ev.id}
+              ref={isActive ? activeItemRef : undefined}
+              onClick={() => onSelect(ev.id)}
+              style={{
+                width: "100%", display: "flex", alignItems: "flex-start",
+                gap: 10, padding: "8px 14px",
+                background: isActive ? `${tc}18` : "transparent",
+                border: "none",
+                borderLeft: `2.5px solid ${isActive ? tc : "transparent"}`,
+                cursor: "none", textAlign: "left",
+                transition: "background 0.18s, border-color 0.18s",
+              }}
+              whileHover={{ background: isActive ? `${tc}18` : "rgba(255,255,255,0.03)" }}
+            >
+              {/* Minute */}
+              <div style={{
+                fontSize: isGoal ? "1.05rem" : isCard ? "0.92rem" : isSub ? "0.82rem" : "0.72rem",
+                fontWeight: 900, color: isActive ? tc : `${tc}99`,
+                lineHeight: 1, minWidth: 30, paddingTop: 1,
+                transition: "color 0.18s",
+              }}>
+                {ev.minute}&prime;
+              </div>
+
+              {/* Icon + label */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                  <span style={{ fontSize: isGoal ? "0.9rem" : "0.75rem" }}>
+                    {TYPE_ICON[ev.eventType] ?? "·"}
+                  </span>
+                  <span style={{
+                    fontSize: "0.4rem", letterSpacing: "0.2em", fontWeight: 700,
+                    color: isCard ? "#FFD700" : isGoal ? tc : "rgba(255,255,255,0.3)",
+                  }}>
+                    {TYPE_LABEL[ev.eventType] ?? ev.eventType.toUpperCase()}
+                    {ev.isKey && " ★"}
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: isGoal ? "0.82rem" : isFoul ? "0.6rem" : "0.72rem",
+                  fontWeight: isGoal ? 700 : 500,
+                  color: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.55)",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  lineHeight: 1.2,
+                  transition: "color 0.18s",
+                }}>
+                  {label}
+                </div>
+              </div>
+            </motion.button>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div style={{
+            padding: "24px 14px", textAlign: "center",
+            fontSize: "0.6rem", color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em",
+          }}>
+            No events match
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ─── Match Flow Bar ────────────────────────────────────────────────────────────
-// A broadcast-style momentum indicator showing event distribution between teams.
-function MatchFlowBar({ homeColor, awayColor, homeCode, awayCode, homePct }: {
+// ─── Event scrubber ────────────────────────────────────────────────────────────
+function EventScrubber({
+  events, activeIdx, activeEvent, onPrev, onNext, homeColor, awayColor,
+}: {
+  events: PitchEvent[]; activeIdx: number;
+  activeEvent?: PitchEvent; onPrev: () => void; onNext: () => void;
   homeColor: string; awayColor: string;
-  homeCode: string;  awayCode: string;
-  homePct: number;
 }) {
-  const awayPct = 100 - homePct;
+  const canPrev = activeIdx > 0;
+  const canNext = activeIdx < events.length - 1;
+  const tc = activeEvent?.color ?? homeColor;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      style={{ marginBottom: 4 }}
-    >
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        marginBottom: 5,
-        fontSize: "0.42rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.22)",
-      }}>
-        <span style={{ color: homeColor }}>{homeCode} {homePct}%</span>
-        <span style={{ letterSpacing: "0.26em" }}>MATCH FLOW</span>
-        <span style={{ color: awayColor }}>{awayPct}% {awayCode}</span>
-      </div>
-      <div style={{ height: 2, borderRadius: 2, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-        <motion.div
-          style={{ height: "100%", display: "flex", transformOrigin: "left center" }}
-          initial={{ scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 1.1, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        >
-          <motion.div
-            style={{ height: "100%", background: homeColor }}
-            initial={{ width: "50%" }}
-            animate={{ width: `${homePct}%` }}
-            transition={{ duration: 1.2, delay: 0.55, ease: [0.16, 1, 0.3, 1] }}
-          />
-          <motion.div
-            style={{ height: "100%", background: awayColor, flex: 1 }}
-          />
-        </motion.div>
-      </div>
-    </motion.div>
+    <div style={{
+      height: 58, flexShrink: 0,
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0 20px",
+      background: "rgba(3,6,18,0.94)",
+      backdropFilter: "blur(20px)",
+      borderTop: "1px solid rgba(255,255,255,0.05)",
+      gap: 12,
+    }}>
+      <motion.button
+        onClick={onPrev} disabled={!canPrev}
+        style={{
+          background: "none", border: "none", cursor: canPrev ? "none" : "default",
+          color: canPrev ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.15)",
+          fontFamily: "inherit", fontSize: "0.52rem", letterSpacing: "0.16em",
+          display: "flex", alignItems: "center", gap: 6,
+        }}
+        whileHover={canPrev ? { color: "rgba(255,255,255,0.9)" } : {}}
+      >
+        ← PREV
+      </motion.button>
+
+      <AnimatePresence mode="wait">
+        {activeEvent ? (
+          <motion.div key={activeEvent.id}
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22 }}
+            style={{ textAlign: "center", flex: 1 }}
+          >
+            <div style={{
+              fontSize: "0.42rem", letterSpacing: "0.22em",
+              color: "rgba(255,255,255,0.24)", marginBottom: 2,
+            }}>
+              {activeIdx + 1} / {events.length}
+            </div>
+            <div style={{
+              fontSize: "0.88rem", fontWeight: 800, color: tc,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>
+              <span style={{ opacity: 0.7 }}>{activeEvent.minute}&prime; </span>
+              {activeEvent.keyMoment?.title ??
+                (activeEvent.eventType === "substitution"
+                  ? `${activeEvent.playerIn} for ${activeEvent.playerOut}`
+                  : activeEvent.player ?? activeEvent.team)}
+            </div>
+          </motion.div>
+        ) : (
+          <div style={{ flex: 1, textAlign: "center", fontSize: "0.5rem", color: "rgba(255,255,255,0.2)", letterSpacing: "0.2em" }}>
+            SELECT AN EVENT
+          </div>
+        )}
+      </AnimatePresence>
+
+      <motion.button
+        onClick={onNext} disabled={!canNext}
+        style={{
+          background: "none", border: "none", cursor: canNext ? "none" : "default",
+          color: canNext ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.15)",
+          fontFamily: "inherit", fontSize: "0.52rem", letterSpacing: "0.16em",
+          display: "flex", alignItems: "center", gap: 6,
+        }}
+        whileHover={canNext ? { color: "rgba(255,255,255,0.9)" } : {}}
+      >
+        NEXT →
+      </motion.button>
+    </div>
   );
 }
 
-// ─── Team Code Badge ───────────────────────────────────────────────────────────
-function GradCode({ code, color }: { code: string; color: string }) {
+// ─── Perspective analysis ──────────────────────────────────────────────────────
+function getPerspective(eventType: string, p: Perspective, team: string): string {
+  if (p === "referee") {
+    switch (eventType) {
+      case "goal":         return "Review the build-up for offside, encroachment, or foul. Consult VAR if the margin is narrow. Only confirm when all criteria are satisfied.";
+      case "foul":         return "Assess under Law 12: careless, reckless, or excessive force? Consider advantage. If the foul stops a promising attack, issue a caution.";
+      case "Yellow Card":  return "Caution issued. Confirm the infringement meets Law 12 criteria — persistent infringement, foul denying a promising attack, or dissent.";
+      case "substitution": return "Record the substitution and verify the replacement player's number on the board. Ensure the outgoing player has left the pitch before play resumes.";
+      default:             return "Observe the play. If an infringement occurred, apply the Laws of the Game accordingly.";
+    }
+  }
+  if (p === "fan") {
+    switch (eventType) {
+      case "goal":         return "That's a goal! The ball has crossed the line and the referee has confirmed it. One team has just changed the scoreline.";
+      case "foul":         return "The referee has stopped play. A free kick is awarded to the other team — they can take a quick restart or set up a dead-ball situation.";
+      case "Yellow Card":  return "A yellow card is a formal warning. If this player gets another yellow in the same game, they'll be sent off and their team plays with ten men.";
+      case "substitution": return "A manager is changing their tactics. The new player brings fresh legs and perhaps a different role that could shift the balance of the game.";
+      default:             return "Keep watching — every moment on the pitch could change the game.";
+    }
+  }
+  // supporter
+  switch (eventType) {
+    case "goal":         return `${team} have scored. This is the moment that defines seasons, careers, and memories — everything the supporters came to witness.`;
+    case "foul":         return "The crowd reacts. Whether it's frustration at the decision or relief that play has stopped, the mood in the stadium shifts with every whistle.";
+    case "Yellow Card":  return "Tension rises. A booking puts a player on the edge — the supporters know one more mistake ends their influence on this game.";
+    case "substitution": return "The manager believes in this. A change of personnel is a declaration of intent — either chasing the game or protecting what has been built.";
+    default:             return "Every moment carries weight. This is why football matters.";
+  }
+}
+
+// ─── Right explanation panel ───────────────────────────────────────────────────
+function ExplanationPanel({
+  event, narrative, meta, perspective, homeColor,
+}: {
+  event?: PitchEvent; narrative: string; meta: MatchMeta;
+  perspective: Perspective; homeColor: string;
+}) {
+  const [showPlayer, setShowPlayer] = useState<string | null>(null);
+
+  useEffect(() => { setShowPlayer(null); }, [event?.id]);
+
+  const perspLabel = { referee: "REFEREE VIEW", fan: "NEW FAN", supporter: "SUPPORTER" }[perspective];
+  const tc = event?.color ?? homeColor;
+
   return (
     <div style={{
-      fontSize: "0.9rem", fontWeight: 700, letterSpacing: "0.1em",
-      background: `linear-gradient(160deg,${color}ee,${color}77)`,
-      WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
-    }}>{code}</div>
+      width: 292, flexShrink: 0,
+      display: "flex", flexDirection: "column",
+      background: "rgba(4,8,20,0.88)",
+      backdropFilter: "blur(22px)",
+      borderLeft: "1px solid rgba(255,255,255,0.06)",
+      overflowY: "auto",
+    }}>
+      <AnimatePresence mode="wait">
+        {event ? (
+          <motion.div key={event.id}
+            initial={{ opacity: 0, x: 14 }} animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.3 }}
+            style={{ padding: "18px 16px", flex: 1 }}
+          >
+            {/* Top accent line */}
+            <div style={{ height: "2px", background: `linear-gradient(90deg, ${tc}, transparent)`, marginBottom: 16 }} />
+
+            {/* Event header */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+                <span style={{
+                  fontSize: "2.8rem", fontWeight: 900, color: tc, lineHeight: 1,
+                  textShadow: `0 0 30px ${tc}66`,
+                }}>
+                  {event.minute}&prime;
+                </span>
+                <div>
+                  <div style={{
+                    fontSize: "0.44rem", letterSpacing: "0.22em", fontWeight: 700,
+                    color: event.eventType === "Yellow Card" ? "#FFD700" : tc,
+                  }}>
+                    {TYPE_LABEL[event.eventType] ?? event.eventType.toUpperCase()}
+                    {event.isKey && " ★"}
+                  </div>
+                  <div style={{ fontSize: "0.48rem", color: "rgba(255,255,255,0.38)", letterSpacing: "0.12em" }}>
+                    {event.team.toUpperCase()}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                fontSize: "1.15rem", fontWeight: 800, color: "#fff",
+                lineHeight: 1.15, marginBottom: 4,
+              }}>
+                {event.keyMoment?.title ??
+                  (event.eventType === "substitution"
+                    ? `${event.playerIn} for ${event.playerOut}`
+                    : event.player)}
+              </div>
+            </div>
+
+            <Divider />
+
+            {/* What happened */}
+            <Section label="WHAT HAPPENED">
+              <p style={{ fontSize: "0.76rem", color: "rgba(255,255,255,0.62)", lineHeight: 1.7, margin: 0 }}>
+                {event.keyMoment?.context ??
+                  (event.eventType === "goal"
+                    ? `${event.player} scored for ${event.team}${event.minute > 0 ? ` in the ${event.minute}th minute` : ""}.`
+                    : event.eventType === "foul"
+                    ? `${event.player} was penalized for a foul, resulting in a free kick for the opposition.`
+                    : event.eventType === "Yellow Card"
+                    ? `${event.player} received a yellow card, bringing them one step closer to suspension.`
+                    : `${event.team} made a substitution: ${event.playerIn} replaced ${event.playerOut}.`)}
+              </p>
+            </Section>
+
+            <Divider />
+
+            {/* Perspective analysis */}
+            <Section label={perspLabel}>
+              <p style={{ fontSize: "0.74rem", color: "rgba(255,255,255,0.52)", lineHeight: 1.72, margin: 0 }}>
+                {getPerspective(event.eventType, perspective, event.team)}
+              </p>
+            </Section>
+
+            {/* Player card toggle (for events with a specific player) */}
+            {event.player && !event.eventType.includes("substitution") && (
+              <>
+                <Divider />
+                <button
+                  onClick={() => setShowPlayer(showPlayer ? null : event.player!)}
+                  style={{
+                    width: "100%", background: "rgba(255,255,255,0.04)",
+                    border: `1px solid ${showPlayer ? tc : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 4, padding: "8px 12px",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    cursor: "none", fontFamily: "inherit",
+                    color: "rgba(255,255,255,0.5)", marginBottom: 12,
+                  }}
+                >
+                  <span style={{ fontSize: "0.6rem", letterSpacing: "0.16em" }}>
+                    PLAYER INTELLIGENCE
+                  </span>
+                  <span style={{ fontSize: "0.7rem" }}>{showPlayer ? "▲" : "▼"}</span>
+                </button>
+
+                <AnimatePresence>
+                  {showPlayer && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.3 }}
+                      style={{ overflow: "hidden" }}
+                    >
+                      <div style={{
+                        background: "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.07)",
+                        borderRadius: 5, padding: "14px 12px", marginBottom: 12,
+                      }}>
+                        <div style={{
+                          fontSize: "0.88rem", fontWeight: 800, color: "#fff", marginBottom: 2,
+                        }}>
+                          {event.player}
+                        </div>
+                        <div style={{
+                          fontSize: "0.42rem", letterSpacing: "0.18em",
+                          color: `${tc}99`, marginBottom: 12,
+                        }}>
+                          {event.team.toUpperCase()} · {event.eventType === "goal" ? "FORWARD" : event.eventType === "Yellow Card" ? "MIDFIELDER" : "PLAYER"}
+                        </div>
+
+                        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                          <RadarChart values={playerStats(event.player ?? "")} color={tc} />
+                        </div>
+
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px" }}>
+                          {[
+                            { l: "ATK",  v: playerStats(event.player ?? "")[0] },
+                            { l: "DEF",  v: playerStats(event.player ?? "")[1] },
+                            { l: "CRE",  v: playerStats(event.player ?? "")[2] },
+                            { l: "TEC",  v: playerStats(event.player ?? "")[3] },
+                            { l: "TAC",  v: playerStats(event.player ?? "")[4] },
+                          ].map(({ l, v }) => (
+                            <div key={l} style={{ textAlign: "center" }}>
+                              <div style={{ fontSize: "0.72rem", fontWeight: 800, color: tc }}>{v}</div>
+                              <div style={{ fontSize: "0.36rem", letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)" }}>{l}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div key="empty"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}
+          >
+            <div style={{
+              width: 44, height: 44, borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.1)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "1.4rem", marginBottom: 14, opacity: 0.3,
+            }}>
+              ⚽
+            </div>
+            <div style={{ fontSize: "0.44rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.22)", textAlign: "center" }}>
+              SELECT AN EVENT<br />TO BEGIN INVESTIGATION
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Match narrative footer */}
+      {narrative && (
+        <div style={{
+          padding: "14px 16px",
+          borderTop: "1px solid rgba(255,255,255,0.05)",
+          flexShrink: 0,
+        }}>
+          <div style={{ fontSize: "0.38rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.2)", marginBottom: 6 }}>
+            MATCH CONTEXT
+          </div>
+          <p style={{
+            fontSize: "0.62rem", color: "rgba(255,255,255,0.32)",
+            lineHeight: 1.65, margin: 0,
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: 5,
+            WebkitBoxOrient: "vertical",
+          } as React.CSSProperties}>
+            {narrative}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Divider() {
+  return <div style={{ height: "1px", background: "rgba(255,255,255,0.05)", margin: "14px 0" }} />;
+}
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: "0.38rem", letterSpacing: "0.24em", color: "rgba(255,255,255,0.22)", marginBottom: 7 }}>
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Root component ────────────────────────────────────────────────────────────
+export default function MatchStoryScreen({
+  meta, moments, rawEvents, narrative,
+  perspective = "referee",
+  onBack, onMomentSelect,
+}: Props) {
+  const pitchEvents = useMemo(
+    () => buildEvents(rawEvents, moments, meta), [rawEvents, moments, meta],
+  );
+
+  const [activeId, setActiveId] = useState<string | null>(pitchEvents[0]?.id ?? null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const activeEvent = pitchEvents.find(e => e.id === activeId);
+  const activeIdx   = pitchEvents.findIndex(e => e.id === activeId);
+
+  const listRef      = useRef<HTMLDivElement>(null);
+  const activeRef    = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeId]);
+
+  const goNext = useCallback(() => {
+    if (activeIdx < pitchEvents.length - 1) setActiveId(pitchEvents[activeIdx + 1].id);
+  }, [activeIdx, pitchEvents]);
+
+  const goPrev = useCallback(() => {
+    if (activeIdx > 0) setActiveId(pitchEvents[activeIdx - 1].id);
+  }, [activeIdx, pitchEvents]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); goNext(); }
+      if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   { e.preventDefault(); goPrev(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [goNext, goPrev]);
+
+  const homeColor = meta.home.color ?? "#00b4ff";
+  const awayColor = meta.away.color ?? "#ff4455";
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0,
+      background: "#020810",
+      fontFamily: "'Barlow Condensed', sans-serif",
+      display: "flex", flexDirection: "column",
+      cursor: "none", overflow: "hidden",
+    }}>
+      {/* ── Header ── */}
+      <motion.header
+        initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        style={{
+          height: 50, flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "0 20px",
+          background: "rgba(2,8,16,0.96)",
+          backdropFilter: "blur(20px)",
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          zIndex: 20,
+        }}
+      >
+        <motion.button onClick={onBack} style={{
+          background: "none", border: "none", cursor: "none",
+          color: "rgba(255,255,255,0.3)", fontFamily: "inherit",
+          fontSize: "0.5rem", letterSpacing: "0.2em",
+          display: "flex", alignItems: "center", gap: 6,
+        }} whileHover={{ color: "rgba(255,255,255,0.72)" }}>
+          ← ALL MATCHES
+        </motion.button>
+
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#fff", letterSpacing: "0.06em", lineHeight: 1 }}>
+            <span style={{ color: homeColor }}>{meta.home.code}</span>
+            <span style={{ color: "rgba(255,255,255,0.25)", margin: "0 8px", fontSize: "0.65rem" }}>vs</span>
+            <span style={{ color: awayColor }}>{meta.away.code}</span>
+          </div>
+          <div style={{ fontSize: "0.36rem", color: "rgba(255,255,255,0.22)", letterSpacing: "0.2em", marginTop: 2 }}>
+            {meta.stage} · {meta.date}
+          </div>
+        </div>
+
+        <div style={{
+          fontSize: "0.4rem", letterSpacing: "0.16em",
+          color: "rgba(255,255,255,0.18)", textAlign: "right",
+        }}>
+          <span style={{ fontSize: "0.6rem", fontWeight: 700, color: "rgba(255,255,255,0.36)" }}>
+            {pitchEvents.length}
+          </span> EVENTS
+        </div>
+      </motion.header>
+
+      {/* ── 3-Panel Body ── */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+
+        {/* LEFT: Events navigation */}
+        <EventsPanel
+          events={pitchEvents}
+          activeId={activeId}
+          onSelect={setActiveId}
+          query={searchQuery}
+          onQuery={setSearchQuery}
+          meta={meta}
+          listRef={listRef}
+          activeItemRef={activeRef}
+        />
+
+        {/* CENTER: Pitch + scrubber */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+
+          {/* Team direction labels */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "7px 18px", flexShrink: 0,
+            background: "rgba(2,8,16,0.55)",
+            borderBottom: "1px solid rgba(255,255,255,0.04)",
+          }}>
+            <div style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.18em", color: homeColor, opacity: 0.75 }}>
+              ◀ {meta.home.name.toUpperCase()}
+            </div>
+            <div style={{ fontSize: "0.34rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.16)" }}>
+              MATCH MAP · CLICK ANY EVENT
+            </div>
+            <div style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.18em", color: awayColor, opacity: 0.75 }}>
+              {meta.away.name.toUpperCase()} ▶
+            </div>
+          </div>
+
+          {/* Pitch */}
+          <div style={{ flex: 1, padding: "10px 14px", overflow: "hidden" }}>
+            <PitchView
+              events={pitchEvents}
+              activeId={activeId}
+              onSelect={setActiveId}
+              meta={meta}
+            />
+          </div>
+
+          {/* Event scrubber */}
+          <EventScrubber
+            events={pitchEvents}
+            activeIdx={activeIdx}
+            activeEvent={activeEvent}
+            onPrev={goPrev}
+            onNext={goNext}
+            homeColor={homeColor}
+            awayColor={awayColor}
+          />
+        </div>
+
+        {/* RIGHT: Explanation */}
+        <ExplanationPanel
+          event={activeEvent}
+          narrative={narrative}
+          meta={meta}
+          perspective={perspective}
+          homeColor={homeColor}
+        />
+      </div>
+    </div>
   );
 }

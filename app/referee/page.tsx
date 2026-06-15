@@ -8,9 +8,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import MatchMemory from "@/components/incident/MatchMemory";
-import MatchStoryScreen, { type KeyMoment } from "@/components/incident/MatchStoryScreen";
-import { MATCH_META } from "@/lib/matchData";
+import MatchStoryScreen from "@/components/incident/MatchStoryScreen";
+import { MATCH_META, ALL_MATCHES } from "@/lib/matchData";
 import { MATCH_NARRATIVES } from "@/lib/matchNarratives";
 
 // ─── Match catalogue ───────────────────────────────────────────────────────────
@@ -67,16 +66,15 @@ const MATCHES: {
 ];
 
 type WorldStage = "video" | "ring" | "cards";
-type Phase      = "select" | "story" | "investigate";
+type Phase      = "select" | "investigate";
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function RefereePage() {
   const router = useRouter();
   const [phase, setPhase]                     = useState<Phase>("select");
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
-  const [selectedMoment, setSelectedMoment]   = useState<KeyMoment | null>(null);
 
-  if (phase === "story" && selectedMatchId) {
+  if (phase === "investigate" && selectedMatchId) {
     const narrative = MATCH_NARRATIVES[selectedMatchId];
     const meta      = MATCH_META[selectedMatchId];
     if (narrative && meta) {
@@ -85,29 +83,18 @@ export default function RefereePage() {
           matchId={selectedMatchId}
           meta={meta}
           moments={narrative.moments}
+          rawEvents={ALL_MATCHES[selectedMatchId] ?? []}
           narrative={narrative.narrative}
-          onMomentSelect={(m) => { setSelectedMoment(m); setPhase("investigate"); }}
+          perspective="referee"
           onBack={() => setPhase("select")}
         />
       );
     }
   }
 
-  if (phase === "investigate" && selectedMatchId && selectedMoment) {
-    const narrative = MATCH_NARRATIVES[selectedMatchId];
-    return (
-      <MatchMemory
-        matchId={selectedMatchId}
-        initialMoment={selectedMoment}
-        allMoments={narrative?.moments ?? []}
-        onBack={() => setPhase("story")}
-      />
-    );
-  }
-
   return (
     <RefereeWorld
-      onSelect={(id) => { setSelectedMatchId(id); setPhase("story"); }}
+      onSelect={(id) => { setSelectedMatchId(id); setPhase("investigate"); }}
       onBack={() => router.push("/")}
     />
   );
