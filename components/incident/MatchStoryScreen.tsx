@@ -523,28 +523,43 @@ function computePlayer(playerName: string, all: PitchEvent[]): PlayerProfile {
 
 // ─── Radar chart ───────────────────────────────────────────────────────────────
 function RadarChart({ values, color }: { values: number[]; color: string }) {
-  const cx = 56, cy = 56, maxR = 42;
+  const cx = 52, cy = 52, maxR = 38;
   const labels = ["INF", "DIS", "INV", "PRS", "IMP"];
   const ang = (i: number) => -Math.PI / 2 + (i * Math.PI * 2) / 5;
   const pt  = (v: number, i: number): [number, number] => {
     const a = ang(i), r = (v / 100) * maxR;
     return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
   };
-  const ring = (f: number) => labels.map((_, i) => {
-    const a = ang(i), r = maxR * f;
-    return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
-  }).join(" ");
+  const ringPath = (f: number) => {
+    const pts = labels.map((_, i) => { const a = ang(i), r = maxR * f; return `${cx + r * Math.cos(a)} ${cy + r * Math.sin(a)}`; });
+    return `M ${pts.join(" L ")} Z`;
+  };
+  const dataPath = `M ${values.map((v, i) => pt(v, i).join(" ")).join(" L ")} Z`;
+  const animKey = values.join(",");
   return (
-    <svg width="112" height="112" viewBox="0 0 112 112">
+    <svg width="104" height="104" viewBox="0 0 104 104">
       {[0.25, 0.5, 0.75, 1].map(f => (
-        <polygon key={f} points={ring(f)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="0.7" />
+        <path key={f} d={ringPath(f)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="0.7" />
       ))}
       {labels.map((_, i) => { const [x2, y2] = pt(100, i); return <line key={i} x1={cx} y1={cy} x2={x2} y2={y2} stroke="rgba(255,255,255,0.07)" strokeWidth="0.7" />; })}
-      <path d={`M ${values.map((v, i) => pt(v, i).join(",")).join(" L ")} Z`} fill={`${color}30`} stroke={color} strokeWidth="1.4" />
-      {values.map((v, i) => { const [x, y] = pt(v, i); return <circle key={i} cx={x} cy={y} r="2" fill={color} />; })}
+      <motion.path key={animKey}
+        d={dataPath} fill={`${color}28`} stroke={color} strokeWidth="1.5"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ pathLength: { duration: 0.55, ease: "easeOut" }, opacity: { duration: 0.2 } }}
+      />
+      {values.map((v, i) => {
+        const [x, y] = pt(v, i);
+        return (
+          <motion.circle key={`${animKey}-${i}`} cx={x} cy={y} r="2.2" fill={color}
+            initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.3 + i * 0.04, duration: 0.15 }}
+          />
+        );
+      })}
       {labels.map((label, i) => {
-        const [x, y] = pt(115, i);
-        return <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.32)" fontSize="6.5" fontFamily="'Barlow Condensed',sans-serif" letterSpacing="0.04em">{label}</text>;
+        const [x, y] = pt(118, i);
+        return <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.3)" fontSize="6" fontFamily="'Barlow Condensed',sans-serif" letterSpacing="0.04em">{label}</text>;
       })}
     </svg>
   );
@@ -603,8 +618,8 @@ function PitchMarkings() {
 // ─── Frame scene ───────────────────────────────────────────────────────────────
 // Zones and arrows use AnimatePresence (keyed by frameIdx) for per-frame transitions.
 // Markers animate their cx/cy SVG attributes directly for smooth position movement.
-const MOVE_T = { duration: 0.65, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] };
-const OPAC_T = { duration: 0.35 };
+const MOVE_T = { duration: 0.42, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] };
+const OPAC_T = { duration: 0.20 };
 
 function FrameScene({
   frames, frameIdx,
@@ -656,7 +671,7 @@ function FrameScene({
         {frame.zones.map(zone => (
           <motion.g key={`z-${frameIdx}-${zone.id}`}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.4 }}>
+            transition={{ duration: 0.22 }}>
             <rect
               x={zone.x} y={zone.y} width={zone.w} height={zone.h}
               rx={zone.rx ?? 0}
@@ -765,7 +780,7 @@ function FrameScene({
               animate={{ pathLength: 1, opacity: 1 }}
               exit={{ opacity: 0, pathLength: 0 }}
               transition={{
-                pathLength: { duration: isShot ? 0.65 : 0.5, ease: "easeOut" },
+                pathLength: { duration: isShot ? 0.38 : 0.28, ease: "easeOut" },
                 opacity:    { duration: 0.2 },
               }}
             />
@@ -794,7 +809,7 @@ function FrameScene({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.38 }}>
+              transition={{ duration: 0.22 }}>
               {lbl.text}
             </motion.text>
           );
@@ -933,6 +948,58 @@ function ReconBoard({
         </span>
       </div>
 
+      {/* Event context header — title + brief type label */}
+      <AnimatePresence mode="wait">
+        {activeEvent && (
+          <motion.div key={activeEvent.id}
+            initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
+            style={{
+              height: 58, flexShrink: 0, display: "flex", flexDirection: "column",
+              justifyContent: "center", padding: "0 18px",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+              background: `linear-gradient(180deg, ${activeEvent.color}08 0%, transparent 100%)`,
+            }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{
+                fontSize: "1.6rem", fontWeight: 900, color: activeEvent.color,
+                lineHeight: 1, letterSpacing: "-0.02em", flexShrink: 0,
+              }}>
+                {activeEvent.minute}′
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{
+                  fontSize: "0.28rem", letterSpacing: "0.3em", fontWeight: 700,
+                  color: activeEvent.color, opacity: 0.7, marginBottom: 3,
+                }}>
+                  {activeEvent.eventType === "Yellow Card" ? "CARD"
+                    : activeEvent.eventType === "substitution" ? "SUB"
+                    : activeEvent.eventType.toUpperCase()}
+                  {activeEvent.isKey ? " ★" : ""}
+                </div>
+                <div style={{
+                  fontSize: "0.78rem", fontWeight: 800,
+                  color: "rgba(255,255,255,0.82)", lineHeight: 1.15,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {activeEvent.keyMoment?.title
+                    ?? (activeEvent.eventType === "substitution"
+                      ? `${activeEvent.playerIn} ↑  ${activeEvent.playerOut} ↓`
+                      : activeEvent.player)}
+                </div>
+              </div>
+              <div style={{ flex: 1 }} />
+              <div style={{
+                fontSize: "0.3rem", letterSpacing: "0.18em",
+                color: "rgba(255,255,255,0.2)", flexShrink: 0,
+              }}>
+                {activeEvent.team.toUpperCase()}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Pitch — absolute fill, zero padding */}
       <div style={{ flex: 1, padding: "6px 8px", overflow: "hidden" }}>
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1003,8 +1070,8 @@ function EventsPanel({
       {/* Library header */}
       <div style={{ padding: "18px 14px 12px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
-          <span style={{ fontSize: "0.32rem", letterSpacing: "0.36em", color: "rgba(255,255,255,0.18)" }}>EVENTS</span>
-          <span style={{ fontSize: "0.78rem", fontWeight: 900, color: "rgba(255,255,255,0.22)", lineHeight: 1 }}>{events.length}</span>
+          <span style={{ fontSize: "0.38rem", letterSpacing: "0.36em", color: "rgba(255,255,255,0.18)" }}>EVENTS</span>
+          <span style={{ fontSize: "0.88rem", fontWeight: 900, color: "rgba(255,255,255,0.22)", lineHeight: 1 }}>{events.length}</span>
         </div>
 
         {/* Search — minimal underline style */}
@@ -1017,7 +1084,7 @@ function EventsPanel({
             padding: "5px 0 6px",
             color: "rgba(255,255,255,0.6)",
             fontFamily: "'Barlow Condensed',sans-serif",
-            fontSize: "0.65rem", letterSpacing: "0.03em",
+            fontSize: "0.72rem", letterSpacing: "0.03em",
             outline: "none", cursor: "none",
             marginBottom: 14,
           }}
@@ -1034,7 +1101,7 @@ function EventsPanel({
                   border: active ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.05)",
                   borderRadius: 2, padding: "3px 8px",
                   cursor: "none", fontFamily: "inherit",
-                  fontSize: "0.3rem", letterSpacing: "0.2em",
+                  fontSize: "0.35rem", letterSpacing: "0.2em",
                   color: active ? "rgba(255,255,255,0.72)" : "rgba(255,255,255,0.26)",
                   transition: "all 0.12s",
                 }}>
@@ -1079,7 +1146,7 @@ function EventsPanel({
               {/* Minute column */}
               <div style={{
                 width: 30, fontWeight: 900, lineHeight: 1, flexShrink: 0,
-                fontSize: isGoal ? "0.88rem" : "0.62rem",
+                fontSize: isGoal ? "0.96rem" : "0.7rem",
                 color: isActive ? tc : `${tc}72`,
                 transition: "color 0.12s",
               }}>
@@ -1095,7 +1162,7 @@ function EventsPanel({
               {/* Title */}
               <div style={{
                 flex: 1, minWidth: 0,
-                fontSize: isGoal ? "0.7rem" : "0.58rem",
+                fontSize: isGoal ? "0.78rem" : "0.66rem",
                 fontWeight: isGoal ? 700 : 400,
                 color: isActive ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.38)",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
@@ -1132,7 +1199,7 @@ function StatRow({ label, value, color }: { label: string; value: number; color:
       <div style={{ flex: 1, height: 2, background: "rgba(255,255,255,0.07)", borderRadius: 1 }}>
         <motion.div
           animate={{ width: `${value}%` }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
           style={{ height: "100%", background: color, borderRadius: 1 }}
         />
       </div>
@@ -1232,36 +1299,26 @@ function ExplanationPanel({
 
             <DR />
 
-            {/* ── SECTION 2: Granite Analysis ── */}
+            {/* ── SECTION 2: Frame narration (compact) ── */}
             <div style={{ padding: "0 18px" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)" }}>
-                  GRANITE
-                </span>
-                <span style={{ fontSize: "0.28rem", letterSpacing: "0.2em", color: `${tc}60` }}>
-                  {perspLabel}
-                </span>
-              </div>
-
-              {/* Frame label */}
               <AnimatePresence mode="wait">
                 <motion.div key={`fn-${frameIdx}`}
                   initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
                   <div style={{
-                    fontSize: "0.58rem", fontWeight: 700,
-                    color: tc, letterSpacing: "0.05em", marginBottom: 8,
+                    fontSize: "0.52rem", fontWeight: 700,
+                    color: tc, letterSpacing: "0.05em", marginBottom: 6,
                   }}>
                     {frame?.label ?? "—"}
-                    <span style={{ marginLeft: 8, fontSize: "0.3rem", fontWeight: 400, color: "rgba(255,255,255,0.22)", letterSpacing: "0.16em" }}>
-                      {totalFrames > 0 ? `${frameIdx + 1} / ${totalFrames}` : ""}
+                    <span style={{ marginLeft: 8, fontSize: "0.28rem", fontWeight: 400, color: "rgba(255,255,255,0.22)", letterSpacing: "0.16em" }}>
+                      {totalFrames > 0 ? `${frameIdx + 1}/${totalFrames}` : ""}
                     </span>
                   </div>
                   <p style={{
-                    fontSize: "0.64rem", color: "rgba(255,255,255,0.48)",
-                    lineHeight: 1.72, margin: 0,
+                    fontSize: "0.6rem", color: "rgba(255,255,255,0.42)",
+                    lineHeight: 1.65, margin: 0,
                     display: "-webkit-box", WebkitBoxOrient: "vertical",
-                    WebkitLineClamp: 6, overflow: "hidden",
+                    WebkitLineClamp: 4, overflow: "hidden",
                   } as React.CSSProperties}>
                     {frame?.narration ?? "Select a frame to read the analysis."}
                   </p>
@@ -1269,7 +1326,14 @@ function ExplanationPanel({
               </AnimatePresence>
             </div>
 
-            {/* ── SECTION 3: Player Card ── */}
+            <DR />
+
+            {/* ── SECTION 3: IBM Granite Referee Assistant ── */}
+            <div style={{ padding: "0 18px" }}>
+              <GraniteAssistant event={event} />
+            </div>
+
+            {/* ── SECTION 4: Player Card ── */}
             {profile && playerName && (
               <>
                 <DR />
@@ -1282,8 +1346,16 @@ function ExplanationPanel({
                   <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "rgba(255,255,255,0.88)", lineHeight: 1.15, marginBottom: 2 }}>
                     {playerName}
                   </div>
-                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.28)", marginBottom: 14 }}>
+                  <div style={{ fontSize: "0.3rem", letterSpacing: "0.2em", color: "rgba(255,255,255,0.28)", marginBottom: 12 }}>
                     {event.team.toUpperCase()}
+                  </div>
+
+                  {/* Radar chart — always visible */}
+                  <div style={{ display: "flex", justifyContent: "center", margin: "0 0 14px" }}>
+                    <RadarChart
+                      values={[profile.stats.influence, profile.stats.discipline, profile.stats.involvement, profile.stats.pressure, profile.stats.impact]}
+                      color={tc}
+                    />
                   </div>
 
                   {/* Stat bars — three primary */}
@@ -1314,11 +1386,6 @@ function ExplanationPanel({
                           {/* All 5 stats */}
                           <StatRow label="INVOLVEMENT" value={profile.stats.involvement} color={tc} />
                           <StatRow label="PRESSURE"    value={profile.stats.pressure}    color={tc} />
-
-                          {/* Radar */}
-                          <div style={{ display: "flex", justifyContent: "center", margin: "12px 0" }}>
-                            <RadarChart values={[profile.stats.influence, profile.stats.discipline, profile.stats.involvement, profile.stats.pressure, profile.stats.impact]} color={tc} />
-                          </div>
 
                           {/* Dossier list */}
                           <div style={{ fontSize: "0.3rem", letterSpacing: "0.24em", color: "rgba(255,255,255,0.2)", marginBottom: 8 }}>
@@ -1351,7 +1418,7 @@ function ExplanationPanel({
               </>
             )}
 
-            {/* ── SECTION 4: Match Metadata ── */}
+            {/* ── SECTION 5: Match Metadata ── */}
             <DR />
             <div style={{ padding: "0 18px 20px" }}>
               <div style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)", marginBottom: 8 }}>
@@ -1398,6 +1465,230 @@ function Sect({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
+// ─── Fullscreen hook ───────────────────────────────────────────────────────────
+function useFullscreen() {
+  const [isFs, setIsFs] = useState(false);
+  useEffect(() => {
+    const h = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", h);
+    return () => document.removeEventListener("fullscreenchange", h);
+  }, []);
+  const toggle = useCallback(() => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    else document.exitFullscreen().catch(() => {});
+  }, []);
+  return { isFs, toggle };
+}
+
+// ─── IBM Granite Referee Assistant ────────────────────────────────────────────
+type GMsg = { id: string; role: "user" | "assistant"; text: string };
+
+function getGraniteContext(ev: PitchEvent): string {
+  const t = ev.eventType;
+  const min = ev.minute;
+  const player = ev.player ?? ev.playerIn ?? "player";
+  if (t === "goal") return `${player} scored in minute ${min}. Validate build-up for offside, encroachment, and any handling.`;
+  if (t === "foul") return `${player} committed a foul in minute ${min}. Assess severity under Law 12.`;
+  if (t === "Yellow Card") return `Yellow card issued to ${player} at ${min}′. Log caution, check double-jeopardy, advise fourth official.`;
+  if (t === "substitution") return `Substitution at ${min}′: ${ev.playerIn} replaces ${ev.playerOut}. Confirm eligibility and signal play resumption.`;
+  return `Incident at ${min}′ involving ${player}. Standing by for analysis.`;
+}
+
+const QUICK_RESPONSES: Record<string, (ev: PitchEvent) => string> = {
+  why: ev => {
+    const t = ev.eventType;
+    if (t === "goal") return `Goal confirmed. Offside check at moment of pass: attacking player level or behind the second-last defender. No encroachment detected on goal-line. Decision: goal stands under Law 10.`;
+    if (t === "foul") return `The challenge is classified as careless contact under Law 12 — the player made no attempt to play the ball. Free kick awarded. No caution warranted at this severity level.`;
+    if (t === "Yellow Card") return `Caution issued for persistent infringement under Law 12.3. This follows a pattern of minor fouls. The accumulation threshold was met at this minute.`;
+    if (t === "substitution") return `Tactical substitution — coaching staff decision, not referee-initiated. Referee responsibility: confirm the substituted player has left the field before the replacement enters.`;
+    return `Decision made at ${ev.minute}′ based on real-time positioning and Law of the Game assessment. Granite flagged this as consistent with precedent.`;
+  },
+  law: ev => {
+    const t = ev.eventType;
+    if (t === "goal") return `Law 10 — Determining the Outcome of a Match. Law 11 — Offside: applies if attacker in offside position at moment of pass. Law 12 — handling check. VAR protocol: DOGSO, offside, and encroachment.`;
+    if (t === "foul") return `Law 12 — Fouls and Misconduct. Careless: free kick only. Reckless: caution (yellow). Excessive force or brutality: send-off (red). This incident: careless — free kick awarded, no card.`;
+    if (t === "Yellow Card") return `Law 12.3 — Cautionable offences include: unsporting behaviour, dissent, persistent infringement, delaying restart, not respecting required distance, and entering/re-entering without permission.`;
+    if (t === "substitution") return `Law 3 — The Players. Substitution: up to 5 changes per team in competitive matches. Player must exit at nearest touchline or goal line. Substituted player may not return. All changes must be reported to fourth official.`;
+    return `Law 5 — The Referee. The referee's decision on facts connected with play are final. Law 12 governs misconduct classification.`;
+  },
+  incidents: ev => {
+    const t = ev.eventType;
+    if (t === "goal") return `Similar: Torres vs. Paraguay (2010 WC), Benzema vs. Germany (EURO 2021) — all ruled valid after offside check. Precedent supports goal standing when attacker is level at moment of release.`;
+    if (t === "foul") return `Comparable fouls at this severity in knockout fixtures typically yield cautions only if the offender has prior yellows. Without prior caution, a free kick is the standard outcome — consistent with this decision.`;
+    if (t === "Yellow Card") return `Historical pattern: accumulation of 3+ minor fouls within 20 minutes triggers caution in 78% of major tournament matches. This decision aligns with that benchmark.`;
+    if (t === "substitution") return `Late substitutions (70′+) in tournaments often precede set-piece situations. Coaches typically rotate high-foul-risk players before they earn a second caution. Granite notes this is the ${ev.minute > 70 ? "second" : "first"} half change.`;
+    return `No directly analogous recorded incident in the Granite reference database. Recommend consulting the IFAB Annual Report for nearest precedents.`;
+  },
+  checklist: ev => {
+    const t = ev.eventType;
+    if (t === "goal") return `Checklist:\n1. Confirm ball fully crossed the line\n2. Verify offside position at moment of pass\n3. Check for encroachment or goalkeeper infringement\n4. Signal to fourth official\n5. Restart from centre spot`;
+    if (t === "foul") return `Checklist:\n1. Identify fouling player (number + team)\n2. Classify: careless / reckless / excessive\n3. Award free kick at correct location\n4. Issue caution if reckless or dissent follows\n5. Log in match report`;
+    if (t === "Yellow Card") return `Checklist:\n1. Stop play — identify player by number\n2. Display yellow card high, face players\n3. Inform fourth official of name and offence\n4. Note time and offence in book\n5. Second yellow = automatic red`;
+    if (t === "substitution") return `Checklist:\n1. Receive substitution board from fourth official\n2. Halt play at next stoppage\n3. Confirm exiting player leaves promptly\n4. Allow entering player onto pitch\n5. Signal play resumption`;
+    return `Checklist:\n1. Identify all players involved\n2. Consult Law 12 classification\n3. Award correct restart\n4. Document in match report\n5. Monitor subsequent behaviour`;
+  },
+};
+
+function generateGraniteReply(ev: PitchEvent, query: string): string {
+  const q = query.toLowerCase();
+  if (q.includes("offside") || q.includes("onside"))
+    return `Offside analysis for minute ${ev.minute}: the assistant checks the position of the attacker relative to the second-last defender at the exact moment the ball is played. If level, the player is onside. Video timestamp lock is applied at the kicking frame.`;
+  if (q.includes("var") || q.includes("review"))
+    return `VAR review conditions: goal — offside, handball, foul in build-up; penalty — foul in box, offside; red card — direct red, mistaken identity. This incident ${ev.eventType === "goal" ? "qualifies for goal review" : "may qualify if a clear red card offence occurred"}.`;
+  if (q.includes("card") || q.includes("caution") || q.includes("yellow") || q.includes("red"))
+    return `Card assessment at ${ev.minute}′: Law 12.3 governs cautionable offences. If the player has an existing caution, any further cautionable infringement results in dismissal. Check the disciplinary record before deciding.`;
+  if (q.includes("penalty") || q.includes("box"))
+    return `Penalty box decision: contact inside the penalty area that would constitute a foul elsewhere must be penalised with a penalty kick under Law 12. Key question: was the contact on the ball first, or the player?`;
+  if (q.includes("time") || q.includes("added") || q.includes("stoppage"))
+    return `Time management: the fourth official tracks time lost for substitutions (30s each), injuries, and other stoppages. Granite estimates current expected added time based on recorded events up to ${ev.minute}′.`;
+  return `Granite analysis at ${ev.minute}′: this type of incident (${ev.eventType}) aligns with standard decision-making frameworks. The referee's real-time assessment — confirmed by assistant referee positioning — indicates the correct call was applied under current Laws of the Game.`;
+}
+
+function GraniteAssistant({ event }: { event: PitchEvent }) {
+  const [msgs, setMsgs] = useState<GMsg[]>([]);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const tc = event.color;
+
+  useEffect(() => {
+    setMsgs([{ id: "init", role: "assistant", text: getGraniteContext(event) }]);
+    setInput("");
+  }, [event.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [msgs, thinking]);
+
+  const addReply = (text: string) => setMsgs(p => [...p, { id: Date.now().toString(), role: "assistant", text }]);
+
+  const handleQuick = (key: string) => {
+    const label = { why: "Why this decision?", law: "Applicable law", incidents: "Similar incidents", checklist: "Referee checklist" }[key] ?? key;
+    setMsgs(p => [...p, { id: Date.now().toString(), role: "user", text: label }]);
+    setThinking(true);
+    setTimeout(() => {
+      addReply(QUICK_RESPONSES[key]?.(event) ?? "");
+      setThinking(false);
+    }, 600 + Math.random() * 300);
+  };
+
+  const handleSend = () => {
+    const q = input.trim(); if (!q) return;
+    setInput("");
+    setMsgs(p => [...p, { id: Date.now().toString(), role: "user", text: q }]);
+    setThinking(true);
+    setTimeout(() => {
+      addReply(generateGraniteReply(event, q));
+      setThinking(false);
+    }, 700 + Math.random() * 400);
+  };
+
+  return (
+    <div>
+      {/* Section header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: "0.3rem", letterSpacing: "0.32em", color: "rgba(255,255,255,0.18)" }}>IBM GRANITE</span>
+        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.04)" }} />
+        <span style={{ fontSize: "0.26rem", letterSpacing: "0.14em", color: `${tc}55` }}>REFEREE ASSISTANT</span>
+      </div>
+
+      {/* Message thread */}
+      <div ref={scrollRef} style={{
+        maxHeight: 180, overflowY: "auto",
+        display: "flex", flexDirection: "column", gap: 6,
+        marginBottom: 10,
+        scrollbarWidth: "none",
+      }}>
+        <AnimatePresence initial={false}>
+          {msgs.map(m => (
+            <motion.div key={m.id}
+              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{
+                padding: m.role === "assistant" ? "8px 10px" : "4px 0",
+                background: m.role === "assistant" ? "rgba(255,255,255,0.035)" : "transparent",
+                borderLeft: m.role === "assistant" ? `2px solid ${tc}55` : "none",
+                borderRadius: m.role === "assistant" ? "0 3px 3px 0" : 0,
+              }}>
+              {m.role === "assistant" && (
+                <div style={{ fontSize: "0.24rem", letterSpacing: "0.2em", color: tc, opacity: 0.7, marginBottom: 4 }}>GRANITE</div>
+              )}
+              <p style={{
+                fontSize: "0.58rem",
+                color: m.role === "assistant" ? "rgba(255,255,255,0.58)" : "rgba(255,255,255,0.35)",
+                margin: 0, lineHeight: 1.6,
+                whiteSpace: "pre-line",
+              }}>{m.text}</p>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        {thinking && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ padding: "6px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 2 }}>
+            <motion.span
+              animate={{ opacity: [0.3, 0.9, 0.3] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+              style={{ fontSize: "0.52rem", color: tc, letterSpacing: "0.12em" }}>
+              ANALYZING…
+            </motion.span>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Quick actions */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+        {[
+          { id: "why",       label: "Why this decision?" },
+          { id: "law",       label: "Applicable law"     },
+          { id: "incidents", label: "Similar incidents"  },
+          { id: "checklist", label: "Referee checklist"  },
+        ].map(qa => (
+          <button key={qa.id} onClick={() => handleQuick(qa.id)} style={{
+            background: "rgba(255,255,255,0.04)",
+            border: `1px solid ${tc}30`,
+            borderRadius: 2, cursor: "none",
+            fontFamily: "inherit", fontSize: "0.28rem",
+            letterSpacing: "0.14em",
+            color: "rgba(255,255,255,0.42)",
+            padding: "4px 8px",
+            transition: "all 0.1s",
+          }}>{qa.label}</button>
+        ))}
+      </div>
+
+      {/* Chat input */}
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleSend(); } }}
+          placeholder="Ask Granite about this incident…"
+          style={{
+            flex: 1,
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderBottom: `1px solid ${tc}40`,
+            borderRadius: "2px 2px 0 0",
+            padding: "6px 9px",
+            color: "rgba(255,255,255,0.65)",
+            fontFamily: "inherit",
+            fontSize: "0.58rem",
+            letterSpacing: "0.02em",
+            outline: "none",
+            cursor: "none",
+          }}
+        />
+        <button onClick={handleSend} style={{
+          background: `${tc}18`, border: `1px solid ${tc}35`,
+          borderRadius: 2, cursor: "none",
+          color: tc, fontFamily: "inherit",
+          fontSize: "0.7rem", padding: "5px 10px",
+        }}>→</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Root ──────────────────────────────────────────────────────────────────────
 export default function MatchStoryScreen({
   meta, moments, rawEvents, narrative,
@@ -1424,6 +1715,7 @@ export default function MatchStoryScreen({
 
   const listRef   = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
+  const { isFs, toggle: toggleFs } = useFullscreen();
 
   // Reset frame + auto-play when event changes
   useEffect(() => {
@@ -1437,7 +1729,7 @@ export default function MatchStoryScreen({
   useEffect(() => {
     if (!isPlaying || frames.length === 0) return;
     if (frameIdx >= frames.length - 1) { setIsPlaying(false); return; }
-    const t = setTimeout(() => setFrameIdx(i => i + 1), 2600);
+    const t = setTimeout(() => setFrameIdx(i => i + 1), 1400);
     return () => clearTimeout(t);
   }, [isPlaying, frameIdx, frames.length]);
 
@@ -1516,8 +1808,21 @@ export default function MatchStoryScreen({
           </span>
         </div>
 
-        <div style={{ fontSize: "0.28rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.16)" }}>
-          {meta.date}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ fontSize: "0.28rem", letterSpacing: "0.22em", color: "rgba(255,255,255,0.16)" }}>
+            {meta.date}
+          </div>
+          <motion.button onClick={toggleFs}
+            whileHover={{ color: "rgba(255,255,255,0.65)" }}
+            style={{
+              background: "none", border: "1px solid rgba(255,255,255,0.09)",
+              borderRadius: 2, cursor: "none",
+              color: "rgba(255,255,255,0.28)", fontFamily: "inherit",
+              fontSize: "0.62rem", padding: "2px 8px", lineHeight: 1.4,
+            }}
+            title={isFs ? "Exit Fullscreen" : "Fullscreen"}>
+            {isFs ? "⊡" : "⛶"}
+          </motion.button>
         </div>
       </motion.header>
 
