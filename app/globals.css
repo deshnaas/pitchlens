@@ -39,12 +39,13 @@ body {
 .cursor-ring {
   width: 32px;
   height: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--cursor-accent, rgba(255, 255, 255, 0.38));
   border-radius: 50%;
   position: fixed;
   pointer-events: none;
   z-index: 9998;
   transform: translate(-50%, -50%);
+  transition: border-color 0.35s ease;
 }
 
 @keyframes grain {
