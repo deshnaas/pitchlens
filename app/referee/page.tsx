@@ -73,6 +73,7 @@ export default function RefereePage() {
   const router = useRouter();
   const [phase, setPhase]                     = useState<Phase>("select");
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [visitedWorld,    setVisitedWorld]    = useState(false);
 
   if (phase === "investigate" && selectedMatchId) {
     const narrative = MATCH_NARRATIVES[selectedMatchId];
@@ -94,26 +95,29 @@ export default function RefereePage() {
 
   return (
     <RefereeWorld
-      onSelect={(id) => { setSelectedMatchId(id); setPhase("investigate"); }}
-      onBack={() => router.push("/")}
+      skipIntro={visitedWorld}
+      onSelect={(id) => { setVisitedWorld(true); setSelectedMatchId(id); setPhase("investigate"); }}
+      onBack={() => router.push("/?portals=true")}
     />
   );
 }
 
 // ─── Referee World ─────────────────────────────────────────────────────────────
-function RefereeWorld({ onSelect, onBack }: {
-  onSelect: (id: string) => void;
-  onBack: () => void;
+function RefereeWorld({ onSelect, onBack, skipIntro = false }: {
+  onSelect  : (id: string) => void;
+  onBack    : () => void;
+  skipIntro ?: boolean;
 }) {
-  const [worldStage, setWorldStage] = useState<WorldStage>("video");
+  const [worldStage, setWorldStage] = useState<WorldStage>(skipIntro ? "cards" : "video");
   const [hoveredId, setHoveredId]   = useState<string | null>(null);
   const [enteringId, setEnteringId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (skipIntro) return;
     const t1 = setTimeout(() => setWorldStage("ring"),  3200);
     const t2 = setTimeout(() => setWorldStage("cards"), 4000);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, []);
+  }, [skipIntro]);
 
   const handleSelect = useCallback((id: string) => {
     if (enteringId) return;
@@ -131,6 +135,8 @@ function RefereeWorld({ onSelect, onBack }: {
       {/* ══ STAGE ═══════════════════════════════════════════════════════════════ */}
       <video
         autoPlay muted loop playsInline preload="auto"
+        onError={() => setWorldStage("cards")}
+        onStalled={() => setTimeout(() => setWorldStage("cards"), 2500)}
         style={{
           position: "absolute", inset: 0,
           width: "100%", height: "100%", objectFit: "cover",

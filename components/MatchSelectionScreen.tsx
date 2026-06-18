@@ -17,6 +17,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { POV } from "@/lib/incidents/types";
+import { Lightning } from "@/components/ui/hero-odyssey";
 
 // ── POV palettes ─────────────────────────────────────────────────────────────
 
@@ -191,6 +192,19 @@ export default function MatchSelectionScreen({ pov, onSelect, onBack }: Props) {
           }}
           src="/videos/match-selection-bg.mp4"
         />
+
+        {/* WebGL lightning accent — vertical electricity behind cards */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.8, duration: 2.2 }}
+          style={{ position:"absolute", inset:0, zIndex:2, pointerEvents:"none", opacity:0.10 }}
+        >
+          <Lightning
+            hue={POV_PALETTE[pov].hex === "#a8c4e0" ? 210 : POV_PALETTE[pov].hex === "#7ecfa0" ? 140 : 28}
+            xOffset={0} speed={1.2} intensity={0.5} size={2}
+          />
+        </motion.div>
 
         {/* World scrim — lets depth breathe, doesn't kill the image */}
         <div style={{

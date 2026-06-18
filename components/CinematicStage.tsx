@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { motion } from "framer-motion";
 import { useMouseParallax } from "@/hooks/useMouseParallax";
 
 import VideoSequence     from "./VideoSequence";
@@ -12,6 +13,7 @@ import LensPortals       from "./LensPortals";
 import StorySection      from "./StorySection";
 import ProgressBar       from "./ProgressBar";
 import CinematicCursor   from "./CinematicCursor";
+import { ShaderCanvas }  from "@/components/ui/fireflies-1";
 
 /**
  * CinematicStage — V3
@@ -30,6 +32,33 @@ import CinematicCursor   from "./CinematicCursor";
  *   3 → v3 playing  (stillness)          — title full
  *   4 → v4 playing  (the ball)           — portals revealed, title shrinks
  */
+
+// Compact fireflies shader (abridged for background use — full shader in fireflies-1.tsx)
+const FIREFLIES_SHADER = `#version 300 es
+precision highp float;
+out vec4 fragColor;
+in vec2 v_uv;
+uniform vec3 iResolution;
+uniform float iTime;
+uniform int iFrame;
+uniform vec4 iMouse;
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 r = iResolution.xy;
+  float t = iTime;
+  vec3 FC = vec3(fragCoord, t);
+  vec4 o = vec4(0.0);
+  vec3 s = normalize(FC.rgb * 2.1 - r.xyx), p, c = s / s.y;
+  for (float i=0.0,d=0.0,z=0.0; i++<3e1; o.rgb+=(1.1-sin(p))/d) {
+    p = s*z; p.z -= t;
+    d = ++p.y; p.y = abs(mod(d-2.0,4.0)-2.0);
+    p += 0.03*sin(dot(cos(c),sin(c/0.6-t))/0.1)*(p.y-d);
+    z += (d = 0.7*length(vec3(cos(p.z/0.1)*0.1,(p+sin(p.z*vec3(0.7,1.0,0.0)+t)).xy)-0.1));
+  }
+  o = tanh(o/2e2);
+  fragColor = vec4(o.rgb, 1.0);
+}
+void main(){ mainImage(fragColor, gl_FragCoord.xy); }
+`;
 
 function videoIndexToTitlePhase(videoIdx: number, portalsVisible: boolean): number {
   if (portalsVisible) return 4;
@@ -72,6 +101,16 @@ export default function CinematicStage({ skipToPortals = false }: { skipToPortal
 
       {/* Custom cinematic cursor */}
       <CinematicCursor />
+
+      {/* ── Layer 0: Deep WebGL atmosphere — visible in pre-roll & portals ── */}
+      <motion.div
+        animate={{ opacity: effectPhase === 0 ? 0.55 : effectPhase >= 4 ? 0.18 : 0.06 }}
+        transition={{ duration: 2.4, ease: "easeInOut" }}
+        className="absolute inset-0"
+        style={{ zIndex: 1 }}
+      >
+        <ShaderCanvas fragSource={FIREFLIES_SHADER} pixelRatio={1} />
+      </motion.div>
 
       {/* ── Layer 1: Videos — natural autoplay, scroll boosts rate ── */}
       <VideoSequence

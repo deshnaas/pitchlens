@@ -28,7 +28,8 @@ type PitchEvent = {
   eventType: string; minute: number; second: number;
   team: string; player?: string; playerIn?: string; playerOut?: string;
   isKey: boolean; keyMoment?: KeyMoment;
-  color: string;
+  color: string;     // semantic event color
+  teamColor: string; // raw team color (for player markers)
   x: number; y: number;
 };
 
@@ -56,6 +57,28 @@ type ReconFrame = {
   zones: ZoneDef[]; markers: MarkerDef[];
   arrows: ArrowDef[]; labels: PitchLabelDef[];
 };
+
+// ─── Semantic color system ────────────────────────────────────────────────────
+const C_TEAM_A   = "#4F8CFF"; // Blue        — Team A / home fallback
+const C_TEAM_B   = "#FFB84D"; // Orange      — Team B / away fallback
+const C_GOAL     = "#FFD166"; // Gold        — goals
+const C_CARD_Y   = "#F2C94C"; // Amber       — yellow card
+const C_CARD_R   = "#DC2626"; // Crimson     — red card / rejection
+const C_FOUL     = "#FF7F6A"; // Coral       — fouls
+const C_OFFSIDE  = "#8B5CF6"; // Purple      — offside
+const C_VAR      = "#56CCF2"; // Cyan        — VAR review
+const C_CONFIRM  = "#34D399"; // Emerald     — confirmed decision
+const C_GRANITE  = "#6366F1"; // Indigo      — Granite AI chrome
+
+function eventColor(eventType: string, teamColor: string): string {
+  if (eventType === "goal")         return C_GOAL;
+  if (eventType === "Yellow Card")  return C_CARD_Y;
+  if (eventType === "Red Card")     return C_CARD_R;
+  if (eventType === "foul")         return C_FOUL;
+  if (eventType === "offside")      return C_OFFSIDE;
+  if (eventType === "VAR Review")   return C_VAR;
+  return teamColor; // substitutions, generic events: use team color
+}
 
 // ─── Seeded zone placement ─────────────────────────────────────────────────────
 function sh(seed: number) {
@@ -87,8 +110,11 @@ function buildEvents(raw: RawEvent[], moments: KeyMoment[], meta: MatchMeta): Pi
         (m.team === e.team || (m.type === "goal" && e.event_type === "goal") ||
           (m.type === "card" && e.event_type === "Yellow Card"))
       );
-      const tc = TEAM_REGISTRY[e.team]?.color ??
-        (e.team === meta.home.name ? meta.home.color : meta.away.color);
+      const teamC = TEAM_REGISTRY[e.team]?.color ??
+        (e.team === meta.home.name
+          ? (meta.home.color ?? C_TEAM_A)
+          : (meta.away.color ?? C_TEAM_B));
+      const ec = eventColor(e.event_type, teamC);
       return {
         id: `pe-${i}`,
         eventType: e.event_type, minute: e.minute, second: e.second ?? 0,
@@ -96,7 +122,7 @@ function buildEvents(raw: RawEvent[], moments: KeyMoment[], meta: MatchMeta): Pi
         player: e.player ?? e.player_in,
         playerIn: e.player_in, playerOut: e.player_out,
         isKey: e.event_type === "goal" || e.event_type === "Yellow Card" || !!km,
-        keyMoment: km, color: tc,
+        keyMoment: km, color: ec, teamColor: teamC,
         ...zonePos(e, i, meta),
       };
     });
@@ -105,8 +131,10 @@ function buildEvents(raw: RawEvent[], moments: KeyMoment[], meta: MatchMeta): Pi
 // ─── Frame builders ────────────────────────────────────────────────────────────
 function buildGoalFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): ReconFrame[] {
   const isHome = ev.team === meta.home.name;
-  const tc  = ev.color;
-  const opp = isHome ? (meta.away.color ?? "#ff4455") : (meta.home.color ?? "#00b4ff");
+  const tc  = ev.teamColor; // team color for player markers
+  const ec  = ev.color;     // semantic event color (gold) for highlights
+  const opp = isHome ? (meta.away.color ?? C_TEAM_B) : (meta.home.color ?? C_TEAM_A);
+  void ec;
   const scorer  = ev.player ?? "Scorer";
   const short   = scorer.split(" ").slice(-1)[0];
   const teamU   = (isHome ? meta.home.name : meta.away.name).toUpperCase();
@@ -223,8 +251,8 @@ function buildGoalFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
         { id: "shot", x1: S3.cx, y1: S3.cy, x2: goalX, y2: 34, type: "shot", color: "rgba(255,255,255,0.78)", curved: true, cpx: (S3.cx + goalX) / 2, cpy: 28 },
       ],
       labels: [
-        { id: "lg", x: txtX, y: 32, text: "GOAL", size: "lg" as const, color: tc },
-        { id: "l1", x: txtX, y: 62, text: `${teamU} TAKE THE LEAD`,    size: "sm" as const, color: `${tc}88` },
+        { id: "lg", x: txtX, y: 32, text: "GOAL", size: "lg" as const, color: ec },
+        { id: "l1", x: txtX, y: 62, text: `${teamU} TAKE THE LEAD`,    size: "sm" as const, color: `${ec}88` },
         { id: "l2", x: txtX, y: 67, text: `${min}′ · PENALTY AREA`,    size: "sm" as const, color: "rgba(255,255,255,0.2)" },
       ],
     },
@@ -233,8 +261,9 @@ function buildGoalFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
 
 function buildFoulFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): ReconFrame[] {
   const isHome = ev.team === meta.home.name;
-  const tc  = ev.color;
-  const opp = isHome ? (meta.away.color ?? "#ff4455") : (meta.home.color ?? "#00b4ff");
+  const tc  = ev.teamColor;
+  const ec  = ev.color; // coral for foul highlights
+  const opp = isHome ? (meta.away.color ?? C_TEAM_B) : (meta.home.color ?? C_TEAM_A);
   const player = ev.player ?? "Player";
   const short  = player.split(" ").slice(-1)[0];
   const teamU  = (isHome ? meta.home.name : meta.away.name).toUpperCase();
@@ -275,7 +304,7 @@ function buildFoulFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
         : `The whistle. The crowd reacts immediately. ${short} caught their man. Free kick. ${zone}. Every player reacts.`,
       zones: [
         { id: "zone",    x: zoneX,    y: 0,         w: 35, h: 68, color: tc,                     opacity: 0.09 },
-        { id: "contact", x: ev.x - 9, y: ev.y - 9,  w: 18, h: 18, color: "rgba(255,80,80,0.7)", opacity: 0.18, rx: 9, dashed: true },
+        { id: "contact", x: ev.x - 9, y: ev.y - 9,  w: 18, h: 18, color: ec, opacity: 0.22, rx: 9, dashed: true },
       ],
       markers: [
         { id: "fouler", label: short, cx: ev.x, cy: ev.y, color: tc,  teamSide: "home", highlight: true },
@@ -283,7 +312,7 @@ function buildFoulFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
       ],
       arrows: [],
       labels: [
-        { id: "l1", x: 52.5, y: 62, text: "ILLEGAL CONTACT · LAW 12", size: "sm" as const, color: "rgba(255,80,80,0.55)" },
+        { id: "l1", x: 52.5, y: 62, text: "ILLEGAL CONTACT · LAW 12", size: "sm" as const, color: `${ec}BB` },
         { id: "l2", x: 52.5, y: 67, text: `${zone} · ${min}′`,         size: "sm" as const, color: "rgba(255,255,255,0.2)" },
       ],
     },
@@ -310,8 +339,9 @@ function buildFoulFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
 
 function buildCardFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): ReconFrame[] {
   const isHome = ev.team === meta.home.name;
-  const tc  = ev.color;
-  const opp = isHome ? (meta.away.color ?? "#ff4455") : (meta.home.color ?? "#00b4ff");
+  const tc  = ev.teamColor;
+  const ec  = ev.color; // amber for yellow card
+  const opp = isHome ? (meta.away.color ?? C_TEAM_B) : (meta.home.color ?? C_TEAM_A);
   const player = ev.player ?? "Player";
   const short  = player.split(" ").slice(-1)[0];
   const zone   = ev.x < 35 ? "DEFENSIVE THIRD" : ev.x > 70 ? "ATTACKING THIRD" : "MIDFIELD";
@@ -327,8 +357,8 @@ function buildCardFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
         ? `Something happened that the referee decided required an official warning. ${player} is being booked — given a yellow card. This is their formal caution for this match.`
         : `The referee reaches into the pocket. ${short} knows what's coming. The whole stadium knows.`,
       zones: [
-        { id: "zone",    x: zoneX,    y: 0,        w: 35, h: 68, color: "#FFD700",            opacity: 0.07 },
-        { id: "contact", x: ev.x - 9, y: ev.y - 9, w: 18, h: 18, color: "rgba(255,215,0,0.7)", opacity: 0.18, rx: 9, dashed: true },
+        { id: "zone",    x: zoneX,    y: 0,        w: 35, h: 68, color: ec, opacity: 0.07 },
+        { id: "contact", x: ev.x - 9, y: ev.y - 9, w: 18, h: 18, color: ec, opacity: 0.22, rx: 9, dashed: true },
       ],
       markers: [
         { id: "player", label: short, cx: ev.x, cy: ev.y, color: tc,  teamSide: "home", highlight: true },
@@ -336,7 +366,7 @@ function buildCardFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
       ],
       arrows: [],
       labels: [
-        { id: "l1", x: 52.5, y: 62, text: `${zone} · SANCTIONABLE OFFENCE`, size: "sm" as const, color: "rgba(255,215,0,0.45)" },
+        { id: "l1", x: 52.5, y: 62, text: `${zone} · SANCTIONABLE OFFENCE`, size: "sm" as const, color: `${ec}99` },
         { id: "l2", x: 52.5, y: 67, text: `${min}′`,                         size: "sm" as const, color: "rgba(255,255,255,0.18)" },
       ],
     },
@@ -348,15 +378,15 @@ function buildCardFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
         ? `The referee shows the yellow card. This is an official warning under the Laws of the Game. ${player} must now be careful — a second yellow card in the same match means they will be sent off, leaving their team with ten players.`
         : `Yellow. ${short.toUpperCase()}. The card is out. One more caution and they walk. The psychological weight of that card is immediate — it changes how they play for the rest of the match.`,
       zones: [
-        { id: "zone", x: zoneX, y: 0, w: 35, h: 68, color: "#FFD700", opacity: 0.1 },
+        { id: "zone", x: zoneX, y: 0, w: 35, h: 68, color: ec, opacity: 0.1 },
       ],
       markers: [
         { id: "player", label: short, cx: ev.x, cy: ev.y, color: tc, teamSide: "home", highlight: true },
       ],
       arrows: [],
       labels: [
-        { id: "lg", x: 52.5, y: 30, text: "YELLOW CARD",  size: "lg" as const, color: "#FFD700" },
-        { id: "l1", x: 52.5, y: 62, text: "OFFICIAL CAUTION · LAW 12", size: "sm" as const, color: "rgba(255,215,0,0.55)" },
+        { id: "lg", x: 52.5, y: 30, text: "YELLOW CARD",  size: "lg" as const, color: ec },
+        { id: "l1", x: 52.5, y: 62, text: "OFFICIAL CAUTION · LAW 12", size: "sm" as const, color: `${ec}BB` },
         { id: "l2", x: 52.5, y: 67, text: `${player} · ${min}′`,        size: "sm" as const, color: "rgba(255,255,255,0.22)" },
       ],
     },
@@ -368,13 +398,13 @@ function buildCardFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
         ? `${player} must now play carefully for the rest of the game. One more yellow card means they are sent off and cannot be replaced — their team would play with ten people. Managers often substitute cautioned players to avoid the risk.`
         : `One caution. The game has changed for ${short}. They know it. Their manager knows it. Every challenge from here is a calculation — win the ball or risk the team playing a man down.`,
       zones: [
-        { id: "zone", x: zoneX, y: 0, w: 35, h: 68, color: "#FFD700", opacity: 0.06 },
+        { id: "zone", x: zoneX, y: 0, w: 35, h: 68, color: ec, opacity: 0.06 },
       ],
       markers: [],
       arrows: [],
       labels: [
-        { id: "l1", x: 52.5, y: 30, text: "ONE FURTHER CAUTION",  size: "md" as const, color: "rgba(255,215,0,0.65)" },
-        { id: "l2", x: 52.5, y: 37, text: "RESULTS IN DISMISSAL", size: "md" as const, color: "rgba(255,215,0,0.4)" },
+        { id: "l1", x: 52.5, y: 30, text: "ONE FURTHER CAUTION",  size: "md" as const, color: `${ec}CC` },
+        { id: "l2", x: 52.5, y: 37, text: "RESULTS IN DISMISSAL", size: "md" as const, color: `${ec}77` },
         { id: "l3", x: 52.5, y: 62, text: "PLAYER REMAINS ON CAUTION",     size: "sm" as const, color: "rgba(255,255,255,0.22)" },
         { id: "l4", x: 52.5, y: 67, text: "RISK MANAGEMENT NOW CRITICAL",  size: "sm" as const, color: "rgba(255,255,255,0.16)" },
       ],
@@ -384,7 +414,7 @@ function buildCardFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): Recon
 
 function buildSubFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): ReconFrame[] {
   const isHome   = ev.team === meta.home.name;
-  const tc       = ev.color;
+  const tc       = ev.teamColor;
   const teamU    = (isHome ? meta.home.name : meta.away.name).toUpperCase();
   const inName   = ev.playerIn  ?? "Incoming";
   const outName  = ev.playerOut ?? "Outgoing";
@@ -429,7 +459,7 @@ function buildSubFrames(ev: PitchEvent, meta: MatchMeta, p: Perspective): ReconF
         { id: "incoming", label: inShort,  cx: centerCx + 4, cy: touchY, color: tc,        teamSide: "home" },
       ],
       arrows: [
-        { id: "out", x1: centerCx, y1: 34, x2: centerCx - 4, y2: touchY, type: "run", color: "rgba(255,80,80,0.55)", curved: false },
+        { id: "out", x1: centerCx, y1: 34, x2: centerCx - 4, y2: touchY, type: "run", color: `${tc}66`, curved: false },
         { id: "in",  x1: centerCx + 4, y1: touchY, x2: centerCx, y2: 34, type: "run", color: `${tc}70`,             curved: false },
       ],
       labels: [
@@ -833,7 +863,7 @@ function FrameControls({
   activeEvent?: PitchEvent;
 }) {
   const frame  = frames[frameIdx];
-  const tc     = activeEvent?.color ?? "#4da6ff";
+  const tc     = activeEvent?.color ?? C_TEAM_A;
   const canP   = frameIdx > 0;
   const canN   = frameIdx < frames.length - 1;
 
@@ -926,8 +956,8 @@ function ReconBoard({
   onPlayPause: () => void;
   onFrameClick: (i: number) => void;
 }) {
-  const hc = meta.home.color ?? "#4da6ff";
-  const ac = meta.away.color ?? "#ff4455";
+  const hc = meta.home.color ?? C_TEAM_A;
+  const ac = meta.away.color ?? C_TEAM_B;
 
   return (
     <>
@@ -1030,7 +1060,15 @@ function ReconBoard({
 
 // ─── Left panel — Events Library ──────────────────────────────────────────────
 const TYPE_ICON:  Record<string, string> = { goal: "⚽", "Yellow Card": "🟨", substitution: "⇄", foul: "·" };
-const TYPE_COLOR: Record<string, string> = { goal: "inherit", "Yellow Card": "#FFD700", substitution: "rgba(255,255,255,0.55)", foul: "rgba(255,255,255,0.35)" };
+const TYPE_COLOR: Record<string, string> = {
+  goal:         C_GOAL,
+  "Yellow Card": C_CARD_Y,
+  "Red Card":    C_CARD_R,
+  foul:          C_FOUL,
+  offside:       C_OFFSIDE,
+  "VAR Review":  C_VAR,
+  substitution:  "rgba(255,255,255,0.55)",
+};
 
 type FilterType = "all" | "goal" | "foul" | "Yellow Card" | "substitution";
 const FILTER_OPTS: { id: FilterType; label: string }[] = [
@@ -1226,7 +1264,8 @@ function GranitePanel({
   totalFrames: number;
   perspective: Perspective;
 }) {
-  const tc = event?.color ?? "#4da6ff";
+  const tc = event?.color ?? C_TEAM_A;    // semantic event color — for event identity strip
+  const ai = C_GRANITE;                    // indigo — for Granite AI chrome
   const perspLabel = { referee: "REFEREE", fan: "FAN", supporter: "SUPPORTER" }[perspective];
   const eventType = event?.eventType === "Yellow Card" ? "CARD"
     : event?.eventType === "substitution" ? "SUB"
@@ -1278,14 +1317,14 @@ function GranitePanel({
             {/* ── IBM Granite header ── */}
             <div style={{
               padding: "14px 20px 10px", flexShrink: 0,
-              background: `linear-gradient(180deg, ${tc}09 0%, transparent 100%)`,
+              background: `linear-gradient(180deg, ${ai}09 0%, transparent 100%)`,
             }}>
-              <div style={{ height: 1, background: `linear-gradient(90deg, ${tc}80, ${tc}20, transparent)`, marginBottom: 10 }} />
+              <div style={{ height: 1, background: `linear-gradient(90deg, ${ai}80, ${ai}20, transparent)`, marginBottom: 10 }} />
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
                 <span style={{ fontSize: "0.72rem", fontWeight: 700, letterSpacing: "0.24em", color: "rgba(255,255,255,0.78)" }}>
                   IBM GRANITE
                 </span>
-                <span style={{ fontSize: "0.38rem", letterSpacing: "0.18em", color: `${tc}88`, flexShrink: 0 }}>
+                <span style={{ fontSize: "0.38rem", letterSpacing: "0.18em", color: `${ai}CC`, flexShrink: 0 }}>
                   REFEREE ASSISTANT · {perspLabel}
                 </span>
               </div>
@@ -1320,7 +1359,7 @@ function PlayerPanel({
   meta: MatchMeta;
   homeColor: string;
 }) {
-  const tc = event?.color ?? homeColor;
+  const tc = event?.teamColor ?? homeColor;
   const playerName = event?.player ?? (event?.eventType === "substitution" ? event?.playerIn : undefined);
   const profile = playerName ? computePlayer(playerName, allEvents) : null;
 
@@ -1398,7 +1437,7 @@ function PlayerPanel({
                         ? (e.player === playerName ? `Off` : `On`)
                         : e.eventType}
                     </span>
-                    {e.isKey && <span style={{ fontSize: "0.54rem", color: "#FFD700" }}>★</span>}
+                    {e.isKey && <span style={{ fontSize: "0.54rem", color: C_GOAL }}>★</span>}
                   </div>
                 ))}
               </div>
@@ -1521,7 +1560,8 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const tc = event.color;
+  const tc = event.color; // event color — for left-border of assistant messages
+  const ai = C_GRANITE;  // indigo — for GRANITE label, ANALYZING, input, send button
 
   useEffect(() => {
     setMsgs([{ id: "init", role: "assistant", text: getGraniteContext(event) }]);
@@ -1583,7 +1623,7 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
               borderRadius: m.role === "assistant" ? "0 4px 4px 0" : "0 3px 3px 0",
             }}>
             {m.role === "assistant" && (
-              <div style={{ fontSize: "0.36rem", letterSpacing: "0.22em", color: tc, opacity: 0.85, marginBottom: 6 }}>GRANITE</div>
+              <div style={{ fontSize: "0.36rem", letterSpacing: "0.22em", color: ai, opacity: 0.9, marginBottom: 6 }}>GRANITE</div>
             )}
             {m.role === "user" && (
               <div style={{ fontSize: "0.34rem", letterSpacing: "0.18em", color: "rgba(255,255,255,0.28)", marginBottom: 4 }}>YOU</div>
@@ -1600,7 +1640,7 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           style={{ padding: "8px 14px", background: "rgba(255,255,255,0.025)", borderRadius: 3 }}>
           <motion.span animate={{ opacity: [0.3, 0.9, 0.3] }} transition={{ duration: 1.2, repeat: Infinity }}
-            style={{ fontSize: "0.7rem", color: tc, letterSpacing: "0.14em" }}>
+            style={{ fontSize: "0.7rem", color: ai, letterSpacing: "0.14em" }}>
             ANALYZING…
           </motion.span>
         </motion.div>
@@ -1619,7 +1659,7 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
         {QUICK_BTNS.map(qa => (
           <button key={qa.id} onClick={() => handleQuick(qa.id)} style={{
             background: "rgba(255,255,255,0.04)",
-            border: `1px solid ${tc}35`,
+            border: `1px solid ${ai}35`,
             borderRadius: 2, cursor: "none",
             fontFamily: "inherit",
             fontSize: flex ? "0.46rem" : "0.44rem",
@@ -1640,7 +1680,7 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
             flex: 1,
             background: "rgba(255,255,255,0.045)",
             border: "1px solid rgba(255,255,255,0.07)",
-            borderBottom: `2px solid ${tc}55`,
+            borderBottom: `2px solid ${ai}55`,
             borderRadius: "3px 3px 0 0",
             padding: flex ? "9px 12px" : "8px 10px",
             color: "rgba(255,255,255,0.75)",
@@ -1651,9 +1691,9 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
           }}
         />
         <button onClick={handleSend} style={{
-          background: `${tc}22`, border: `1px solid ${tc}45`,
+          background: `${ai}22`, border: `1px solid ${ai}45`,
           borderRadius: 3, cursor: "none",
-          color: tc, fontFamily: "inherit",
+          color: ai, fontFamily: "inherit",
           fontSize: "1.14rem", padding: "0 16px", flexShrink: 0,
         }}>→</button>
       </div>
@@ -1673,8 +1713,8 @@ function GraniteAssistant({ event, flex }: { event: PitchEvent; flex?: boolean }
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: "0.46rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.22)" }}>IBM GRANITE</span>
-        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${tc}30, transparent)` }} />
-        <span style={{ fontSize: "0.38rem", letterSpacing: "0.18em", color: tc, opacity: 0.6 }}>REFEREE ASSISTANT</span>
+        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${ai}30, transparent)` }} />
+        <span style={{ fontSize: "0.38rem", letterSpacing: "0.18em", color: ai, opacity: 0.7 }}>REFEREE ASSISTANT</span>
       </div>
       {msgThread}
       {actionsAndInput}
@@ -1756,8 +1796,8 @@ export default function MatchStoryScreen({
     return () => window.removeEventListener("keydown", h);
   }, [goNextEvent, goPrevEvent, goNextFrame, goPrevFrame]);
 
-  const homeColor = meta.home.color ?? "#00b4ff";
-  const awayColor = meta.away.color ?? "#ff4455";
+  const homeColor = meta.home.color ?? C_TEAM_A;
+  const awayColor = meta.away.color ?? C_TEAM_B;
   const currentFrame = frames[frameIdx] ?? null;
 
   return (

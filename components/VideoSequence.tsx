@@ -104,12 +104,27 @@ export default function VideoSequence({ parallax, onPhaseChange, onComplete }: P
       });
     });
 
-    // ── 4. Start first video ──
+    // ── 4. Start first video — auto-skip if it doesn't load within 3s ──
     const first = videoRefs.current[0];
+    let skipTimer: ReturnType<typeof setTimeout> | undefined;
     if (first) {
-      const tryPlay = () => first.play().catch(() => {});
-      if (first.readyState >= 2) tryPlay();
-      else first.addEventListener("canplay", tryPlay, { once: true });
+      const tryPlay = () => {
+        clearTimeout(skipTimer);
+        first.play().catch(() => {});
+      };
+      if (first.readyState >= 2) {
+        tryPlay();
+      } else {
+        first.addEventListener("canplay", tryPlay, { once: true });
+        // If video hasn't started within 3s (e.g. slow ngrok), jump straight to portals
+        skipTimer = setTimeout(() => {
+          // Advance through all videos instantly to reach portals
+          activeIdxRef.current = VIDEOS.length - 1;
+          setActiveIndex(VIDEOS.length - 1);
+          onPhaseRef.current(VIDEOS.length - 1);
+          onCompleteRef.current();
+        }, 3000);
+      }
     }
     onPhaseRef.current(0); // notify: v1 is active
 

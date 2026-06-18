@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/(.*)",
+        headers: [
+          // Bypass the ngrok browser-warning interstitial
+          { key: "ngrok-skip-browser-warning", value: "true" },
+        ],
+      },
+      {
         source: "/videos/:path*",
         headers: [
           { key: "Accept-Ranges", value: "bytes" },

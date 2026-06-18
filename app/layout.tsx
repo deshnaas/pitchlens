@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import CustomCursor from "@/components/ui/CustomCursor";
+import FullscreenButton from "@/components/ui/FullscreenButton";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,6 +24,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} h-full`}>
       <body className="h-full w-full overflow-hidden bg-black antialiased">
         <CustomCursor />
+        <FullscreenButton />
         {children}
       </body>
     </html>
