@@ -46,8 +46,7 @@ let _cache: Dataset | null = null;
 function loadDataset(): Dataset {
   if (_cache) return _cache;
 
-  // Absolute path to the master dataset — adjust if moved
-  const filePath = path.join("C:\\Users\\spdes\\open-data", "pitchlens_master_dataset.json");
+  const filePath = path.join(process.cwd(), "data", "pitchlens_master_dataset.json");
 
   const raw  = fs.readFileSync(filePath, "utf-8");
   _cache     = JSON.parse(raw) as Dataset;
