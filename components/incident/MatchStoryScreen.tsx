@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { TEAM_REGISTRY } from "@/lib/matchData";
 import type { MatchMeta, RawEvent } from "@/lib/matchData";
@@ -958,6 +959,7 @@ function ReconBoard({
 }) {
   const hc = meta.home.color ?? C_TEAM_A;
   const ac = meta.away.color ?? C_TEAM_B;
+  const router = useRouter();
 
   return (
     <>
@@ -970,9 +972,28 @@ function ReconBoard({
         <span style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.22em", color: hc, opacity: 0.55 }}>
           ◀ {meta.home.code}
         </span>
-        <span style={{ fontSize: "0.38rem", letterSpacing: "0.4em", color: "rgba(255,255,255,0.1)" }}>
-          INVESTIGATION BOARD
-        </span>
+        {activeEvent ? (
+          <button
+            onClick={() => {
+              const p = activeEvent.player ?? activeEvent.playerIn ?? activeEvent.team ?? "";
+              sessionStorage.setItem("referee_matchId", meta.id);
+              router.push(`/moment?matchId=${encodeURIComponent(meta.id)}&eventId=${encodeURIComponent(activeEvent.id)}&minute=${activeEvent.minute}&player=${encodeURIComponent(p)}&type=${encodeURIComponent(activeEvent.eventType)}&team=${encodeURIComponent(meta.home.code)}&lens=referee`);
+            }}
+            style={{
+              background: "#f0c028", border: "none", borderRadius: 4,
+              padding: "2px 10px", cursor: "pointer",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "10px", letterSpacing: "0.18em", fontWeight: 900,
+              color: "#000", whiteSpace: "nowrap",
+            }}
+          >
+            EXPLORE MOMENT →
+          </button>
+        ) : (
+          <span style={{ fontSize: "0.38rem", letterSpacing: "0.4em", color: "rgba(255,255,255,0.1)" }}>
+            INVESTIGATION BOARD
+          </span>
+        )}
         <span style={{ fontSize: "0.46rem", fontWeight: 800, letterSpacing: "0.22em", color: ac, opacity: 0.55 }}>
           {meta.away.code} ▶
         </span>

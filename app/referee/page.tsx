@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import MatchStoryScreen from "@/components/incident/MatchStoryScreen";
 import { MATCH_META, ALL_MATCHES } from "@/lib/matchData";
+import FlagImg from "@/components/ui/FlagImg";
 import { MATCH_NARRATIVES } from "@/lib/matchNarratives";
 
 // ─── Match catalogue ───────────────────────────────────────────────────────────
@@ -50,7 +51,7 @@ const MATCHES: {
     floatDelay: 1.5,
   },
   {
-    id: "portugal-ghana",
+    id: "ghana-portugal",
     chapterTitle: "RONALDO'S HISTORIC NIGHT",
     featured: false,
     pos: { left: "79%", top: "64%" },
@@ -74,6 +75,16 @@ export default function RefereePage() {
   const [phase, setPhase]                     = useState<Phase>("select");
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [visitedWorld,    setVisitedWorld]    = useState(false);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem("referee_matchId");
+    if (saved) {
+      sessionStorage.removeItem("referee_matchId");
+      setSelectedMatchId(saved);
+      setVisitedWorld(true);
+      setPhase("investigate");
+    }
+  }, []);
 
   if (phase === "investigate" && selectedMatchId) {
     const narrative = MATCH_NARRATIVES[selectedMatchId];
@@ -460,6 +471,9 @@ function MatchCard({ match, meta, isHovered, isEntering, onHover, onSelect }: {
           paddingBottom: 2,
         }}>
           <div style={{ flex: 1, textAlign: "left" }}>
+            <div style={{ marginBottom: 4 }}>
+              <FlagImg code={meta.home.flagCode} size={match.featured ? 28 : 22} />
+            </div>
             <div style={{
               fontSize: match.featured ? "1.9rem" : "1.5rem",
               fontWeight: 900,
@@ -494,6 +508,9 @@ function MatchCard({ match, meta, isHovered, isEntering, onHover, onSelect }: {
           </div>
 
           <div style={{ flex: 1, textAlign: "right" }}>
+            <div style={{ marginBottom: 4 }}>
+              <FlagImg code={meta.away.flagCode} size={match.featured ? 28 : 22} />
+            </div>
             <div style={{
               fontSize: match.featured ? "1.9rem" : "1.5rem",
               fontWeight: 900,

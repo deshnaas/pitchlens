@@ -14,6 +14,8 @@ export type RawEvent = {
 export type TeamMeta = {
   name: string;
   code: string;
+  flag: string;          // emoji flag (fallback)
+  flagCode: string;      // ISO 3166-1 alpha-2 for flagcdn.com
   color: string;         // primary kit / accent
   colorDim: string;      // rgba for pitch dots
   side: "home" | "away";
@@ -26,23 +28,24 @@ export type MatchMeta = {
   stage: string;
   venue: string;
   date: string;
-  headline: string;      // the narrative title for this match
-  subline: string;       // one-line emotional hook
+  headline: string;
+  subline: string;
+  score: [number, number]; // [home goals, away goals] — final
 };
 
 // ─── TEAM REGISTRY ────────────────────────────────────────────────
 export const TEAM_REGISTRY: Record<string, Omit<TeamMeta, "side">> = {
-  "Germany":       { name: "Germany",       code: "GER", color: "#d9d9d9", colorDim: "rgba(217,217,217,0.85)" },
-  "Japan":         { name: "Japan",         code: "JPN", color: "#003f87", colorDim: "rgba(0,63,135,0.85)"   },
-  "Spain":         { name: "Spain",         code: "ESP", color: "#c60b1e", colorDim: "rgba(198,11,30,0.85)"  },
-  "Ghana":         { name: "Ghana",         code: "GHA", color: "#006b3f", colorDim: "rgba(0,107,63,0.85)"   },
-  "Portugal":      { name: "Portugal",      code: "POR", color: "#006600", colorDim: "rgba(0,102,0,0.85)"    },
-  "Belgium":       { name: "Belgium",       code: "BEL", color: "#c8102e", colorDim: "rgba(200,16,46,0.85)"  },
-  "Croatia":       { name: "Croatia",       code: "CRO", color: "#ff0000", colorDim: "rgba(255,0,0,0.85)"    },
-  "England":       { name: "England",       code: "ENG", color: "#ffffff", colorDim: "rgba(255,255,255,0.85)" },
-  "Wales":         { name: "Wales",         code: "WAL", color: "#c8102e", colorDim: "rgba(200,16,46,0.85)"  },
-  "Iran":          { name: "Iran",          code: "IRN", color: "#239f40", colorDim: "rgba(35,159,64,0.85)"  },
-  "United States": { name: "United States", code: "USA", color: "#b22234", colorDim: "rgba(178,34,52,0.85)"  },
+  "Germany":       { name: "Germany",       code: "GER", flag: "🇩🇪", flagCode: "de", color: "#d9d9d9", colorDim: "rgba(217,217,217,0.85)" },
+  "Japan":         { name: "Japan",         code: "JPN", flag: "🇯🇵", flagCode: "jp", color: "#003f87", colorDim: "rgba(0,63,135,0.85)"   },
+  "Spain":         { name: "Spain",         code: "ESP", flag: "🇪🇸", flagCode: "es", color: "#c60b1e", colorDim: "rgba(198,11,30,0.85)"  },
+  "Ghana":         { name: "Ghana",         code: "GHA", flag: "🇬🇭", flagCode: "gh", color: "#006b3f", colorDim: "rgba(0,107,63,0.85)"   },
+  "Portugal":      { name: "Portugal",      code: "POR", flag: "🇵🇹", flagCode: "pt", color: "#006600", colorDim: "rgba(0,102,0,0.85)"    },
+  "Belgium":       { name: "Belgium",       code: "BEL", flag: "🇧🇪", flagCode: "be", color: "#c8102e", colorDim: "rgba(200,16,46,0.85)"  },
+  "Croatia":       { name: "Croatia",       code: "CRO", flag: "🇭🇷", flagCode: "hr", color: "#ff0000", colorDim: "rgba(255,0,0,0.85)"    },
+  "England":       { name: "England",       code: "ENG", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", flagCode: "gb-eng", color: "#ffffff", colorDim: "rgba(255,255,255,0.85)" },
+  "Wales":         { name: "Wales",         code: "WAL", flag: "🏴󠁧󠁢󠁷󠁬󠁳󠁿", flagCode: "gb-wls", color: "#c8102e", colorDim: "rgba(200,16,46,0.85)"  },
+  "Iran":          { name: "Iran",          code: "IRN", flag: "🇮🇷", flagCode: "ir", color: "#239f40", colorDim: "rgba(35,159,64,0.85)"  },
+  "United States": { name: "United States", code: "USA", flag: "🇺🇸", flagCode: "us", color: "#b22234", colorDim: "rgba(178,34,52,0.85)"  },
 };
 
 // ─── MATCH REGISTRY ───────────────────────────────────────────────
@@ -56,6 +59,7 @@ export const MATCH_META: Record<string, MatchMeta> = {
     date: "23 Nov 2022",
     headline: "The Giant Killers",
     subline: "Japan overturns history with two second-half goals to stun Germany.",
+    score: [1, 2],
   },
   "iran-usa": {
     id: "iran-usa",
@@ -66,6 +70,7 @@ export const MATCH_META: Record<string, MatchMeta> = {
     date: "29 Nov 2022",
     headline: "The Rivalry Renewed",
     subline: "Pulisic scores at personal cost to send the USA through.",
+    score: [0, 1],
   },
   "england-wales": {
     id: "england-wales",
@@ -76,9 +81,10 @@ export const MATCH_META: Record<string, MatchMeta> = {
     date: "29 Nov 2022",
     headline: "The Home Nations Derby",
     subline: "Rashford's double and Foden's precision end Wales's World Cup.",
+    score: [3, 0],
   },
-  "portugal-ghana": {
-    id: "portugal-ghana",
+  "ghana-portugal": {
+    id: "ghana-portugal",
     home: { ...TEAM_REGISTRY["Ghana"],    side: "home" },
     away: { ...TEAM_REGISTRY["Portugal"], side: "away" },
     stage: "Group Stage · Group H",
@@ -86,6 +92,7 @@ export const MATCH_META: Record<string, MatchMeta> = {
     date: "24 Nov 2022",
     headline: "Five Goals. No Dull Moments.",
     subline: "Ronaldo, Joao Felix, and Leao hand Portugal victory in a high-drama thriller.",
+    score: [2, 3],
   },
   "japan-spain": {
     id: "japan-spain",
@@ -96,6 +103,7 @@ export const MATCH_META: Record<string, MatchMeta> = {
     date: "1 Dec 2022",
     headline: "Japan Stun Spain Too",
     subline: "Japan come from behind — Doan and Tanaka complete a historic double upset.",
+    score: [2, 1],
   },
   "belgium-croatia": {
     id: "belgium-croatia",
@@ -106,6 +114,7 @@ export const MATCH_META: Record<string, MatchMeta> = {
     date: "1 Dec 2022",
     headline: "The Golden Generation Falls",
     subline: "Belgium's golden generation ends not with a bang, but a goalless draw.",
+    score: [0, 0],
   },
 };
 
@@ -367,6 +376,6 @@ export const ALL_MATCHES: Record<string, RawEvent[]> = {
   "japan-spain":        JAPAN_SPAIN,
   "iran-usa": IRAN_USA,
   "england-wales":      ENGLAND_WALES,
-  "portugal-ghana":     GHANA_PORTUGAL,
+  "ghana-portugal":     GHANA_PORTUGAL,
   "belgium-croatia":    BELGIUM_CROATIA,
 };

@@ -21,7 +21,7 @@ const ALLEGIANCE: Record<string, { home: string; away: string }> = {
   "iran-usa"       : { home: "HOLD YOUR GROUND",        away: "FIGHT THROUGH THE WALL" },
   "germany-japan"  : { home: "RECLAIM THE MATCH",       away: "DEFY THE GIANTS"        },
   "belgium-croatia": { home: "ONE LAST SHOT AT GLORY",  away: "SURVIVE AND ADVANCE"    },
-  "portugal-ghana" : { home: "REFUSE TO SURRENDER",     away: "SHOW YOUR CLASS"        },
+  "ghana-portugal" : { home: "REFUSE TO SURRENDER",     away: "SHOW YOUR CLASS"        },
   "england-wales"  : { home: "THE DERBY IS YOURS",      away: "STAND TOGETHER"         },
 };
 
@@ -30,7 +30,7 @@ const CHANTS: Record<string, { home: string; away: string; neutral: string }> = 
   "iran-usa"       : { home: "WE STAND TOGETHER",     away: "USA ALL THE WAY",         neutral: "BEAUTIFUL GAME" },
   "germany-japan"  : { home: "GERMANY TILL THE END",  away: "BELIEVE — SAMURAI BLUE", neutral: "BEAUTIFUL GAME" },
   "belgium-croatia": { home: "ONE LAST SHOT",         away: "VATRENI FOREVER",         neutral: "BEAUTIFUL GAME" },
-  "portugal-ghana" : { home: "THIS IS OUR TIME",      away: "BLACK STARS RISE",        neutral: "BEAUTIFUL GAME" },
+  "ghana-portugal" : { home: "THIS IS OUR TIME",      away: "BLACK STARS RISE",        neutral: "BEAUTIFUL GAME" },
   "england-wales"  : { home: "IT'S COMING HOME",      away: "TOGETHER STRONGER",       neutral: "BEAUTIFUL GAME" },
 };
 
@@ -154,6 +154,7 @@ export default function AllegianceScene({ match, onSelect, onBack }: Props) {
           <ArchGate
             side="home" large
             teamCode={match.home.code} teamName={match.home.name} tagline={hl.home}
+            flagCode={match.home.flagCode}
             color={hRgb}
             gatesReady={gatesReady} floatDelay={0}
             isHovered={!commitTeam && hovered==="home"}
@@ -168,6 +169,7 @@ export default function AllegianceScene({ match, onSelect, onBack }: Props) {
           <ArchGate
             side="away" large
             teamCode={match.away.code} teamName={match.away.name} tagline={hl.away}
+            flagCode={match.away.flagCode}
             color={aRgb}
             gatesReady={gatesReady} floatDelay={0.80}
             isHovered={!commitTeam && hovered==="away"}
@@ -343,13 +345,13 @@ function AtmosphereLayer({ hovered, commitTeam, commitStage, hRgb, aRgb }: {
 //   A subtle ambient breath is always present at rest.
 function ArchGate({
   side, large,
-  teamCode, teamName, tagline, color,
+  teamCode, teamName, tagline, color, flagCode,
   gatesReady, floatDelay,
   isHovered, commitStage, isReceding,
   onHover, onLeave, onCommit,
 }: {
   side: SupporterTeam; large: boolean;
-  teamCode: string; teamName: string; tagline: string; color: string;
+  teamCode: string; teamName: string; tagline: string; color: string; flagCode: string;
   gatesReady: boolean; floatDelay: number;
   isHovered: boolean;
   commitStage: CommitStage;
@@ -688,6 +690,39 @@ function ArchGate({
 
       {/* ── Gate smoke ── */}
       <GateSmoke color={color} active={active} erupting={erupting} W={W} />
+
+      {/* ── Waving flag above arch ── */}
+      <motion.div
+        animate={{ opacity: gatesReady ? 1 : 0 }}
+        transition={{ duration:0.60, delay: gatesReady ? floatDelay+0.3 : 0 }}
+        style={{
+          position:"absolute", top:-78, left:"50%",
+          transform:"translateX(-50%)",
+          display:"flex", alignItems:"flex-start", gap:0,
+          pointerEvents:"none",
+        }}
+      >
+        <div style={{
+          width:3, height:52, flexShrink:0,
+          background:"linear-gradient(180deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.18) 100%)",
+          borderRadius:"1px 1px 0 0",
+        }}/>
+        <motion.img
+          src={`https://flagcdn.com/w40/${flagCode}.png`}
+          width={large ? 44 : 32}
+          height={large ? 29 : 21}
+          animate={{ skewX: [0, -5, 1, -3, 0, -4, 0] }}
+          transition={{ duration: 2.8, repeat:Infinity, ease:"easeInOut" }}
+          style={{
+            display:"block", objectFit:"cover",
+            borderRadius:"0 2px 2px 0",
+            boxShadow:`0 2px 10px rgba(0,0,0,0.60), 0 0 12px rgba(${color},0.35)`,
+            transformOrigin:"0% 50%",
+            marginTop:4,
+          }}
+          alt={teamCode}
+        />
+      </motion.div>
 
       {/* ── Team name label above arch ── */}
       <motion.div

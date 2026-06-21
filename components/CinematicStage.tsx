@@ -102,6 +102,26 @@ export default function CinematicStage({ skipToPortals = false }: { skipToPortal
       {/* Custom cinematic cursor */}
       <CinematicCursor />
 
+      {/* ── Skip button — visible during video, hidden once portals show ── */}
+      {!portalsVisible && (
+        <button
+          onClick={() => { setStoryVisible(false); setPortalsVisible(true); setVideoPhase(4); }}
+          style={{
+            position: "fixed", top: 22, right: 28, zIndex: 9000,
+            background: "rgba(10,12,20,0.70)", backdropFilter: "blur(10px)",
+            border: "1px solid rgba(255,255,255,0.16)", borderRadius: 4,
+            color: "rgba(255,255,255,0.55)", fontFamily: "'Barlow Condensed', sans-serif",
+            fontSize: "0.52rem", letterSpacing: "0.22em", fontWeight: 600,
+            padding: "7px 16px", cursor: "pointer",
+            transition: "border-color 0.2s, color 0.2s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = "rgba(255,255,255,0.88)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.38)"; }}
+          onMouseLeave={e => { e.currentTarget.style.color = "rgba(255,255,255,0.55)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.16)"; }}
+        >
+          SKIP →
+        </button>
+      )}
+
       {/* ── Layer 0: Deep WebGL atmosphere — visible in pre-roll & portals ── */}
       <motion.div
         animate={{ opacity: effectPhase === 0 ? 0.55 : effectPhase >= 4 ? 0.18 : 0.06 }}

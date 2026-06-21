@@ -11,6 +11,7 @@
 //   FAR R  — Player Profile (radar + friendly stats)
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { TEAM_REGISTRY } from "@/lib/matchData";
 import type { MatchMeta, RawEvent } from "@/lib/matchData";
@@ -851,6 +852,7 @@ function FanMatchBoard({
 }) {
   const hc = FAN_TEAM_A;
   const ac = FAN_TEAM_B;
+  const router = useRouter();
 
   return (
     <>
@@ -864,9 +866,29 @@ function FanMatchBoard({
         <span style={{ fontSize: "0.52rem", fontWeight: 800, letterSpacing: "0.12em", color: hc }}>
           ◀ {meta.home.code}
         </span>
-        <span style={{ fontSize: "0.38rem", letterSpacing: "0.36em", color: FAN_TEXT_3 }}>
-          MATCH BOARD
-        </span>
+        {activeEvent ? (
+          <button
+            onClick={() => {
+              // playerOut was on pitch at this minute — better StatsBomb match than playerIn
+              const p = activeEvent.player ?? activeEvent.playerOut ?? activeEvent.playerIn ?? activeEvent.team ?? "";
+              sessionStorage.setItem("fan_matchId", meta.id);
+              router.push(`/moment?matchId=${encodeURIComponent(meta.id)}&eventId=${encodeURIComponent(activeEvent.id)}&minute=${activeEvent.minute}&player=${encodeURIComponent(p)}&type=${encodeURIComponent(activeEvent.eventType)}&team=${encodeURIComponent(meta.home.code)}&lens=fan`);
+            }}
+            style={{
+              background: "#f0c028", border: "none", borderRadius: 4,
+              padding: "3px 12px", cursor: "pointer",
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: "11px", letterSpacing: "0.18em", fontWeight: 900,
+              color: "#000", whiteSpace: "nowrap",
+            }}
+          >
+            EXPLORE MOMENT →
+          </button>
+        ) : (
+          <span style={{ fontSize: "0.38rem", letterSpacing: "0.36em", color: FAN_TEXT_3 }}>
+            MATCH BOARD
+          </span>
+        )}
         <span style={{ fontSize: "0.52rem", fontWeight: 800, letterSpacing: "0.12em", color: ac }}>
           {meta.away.code} ▶
         </span>

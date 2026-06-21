@@ -208,7 +208,7 @@ Rashford scored again in the 67th minute with a composed finish. The derby was o
   },
 
   // ─── GHANA vs PORTUGAL ──────────────────────────────────────────
-  "portugal-ghana": {
+  "ghana-portugal": {
     narrative: `Five goals in a match that changed direction four times. Portugal scored through a Ronaldo penalty — he became the first player to score at five World Cups. Ghana equalized through Ayew.
 
 Then Portugal's substitutes took over. Joao Felix and Rafael Leao — two of Europe's most exciting attacking talents — both scored. Portugal led 3-1 and appeared to be coasting.

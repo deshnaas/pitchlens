@@ -58,7 +58,7 @@ const FEATURED: FeaturedMatch[] = [
     angle: -30, available: false,
   },
   {
-    id: "portugal-ghana",   title: "Ronaldo's Historic Night",
+    id: "ghana-portugal",   title: "Ronaldo's Historic Night",
     home: "PORTUGAL",       homeflag: "POR",
     away: "GHANA",          awayflag: "GHA",
     energyA: "rgba(175,18,18,",  energyB: "rgba(185,145,0,",

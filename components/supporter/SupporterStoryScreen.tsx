@@ -16,6 +16,7 @@
 import {
   useState, useRef, useEffect, useCallback, useMemo
 } from "react";
+import { useRouter } from "next/navigation";
 import {
   motion, AnimatePresence, useAnimation, useMotionValue, animate
 } from "framer-motion";
@@ -792,7 +793,7 @@ function FrameControls({frames,frameIdx,isPlaying,onPrev,onNext,onPlayPause,onFr
       <div style={{flex:1}}>
         <AnimatePresence mode="wait">
           <motion.div key={`fc-${frameIdx}`} initial={{opacity:0,y:3}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.16}}>
-            <div style={{fontSize:"0.47rem",letterSpacing:"0.32em",color:"rgba(255,255,255,0.14)",marginBottom:1}}>PHASE {frames.length>0?frameIdx+1:"-"}/{frames.length}</div>
+            <div style={{fontSize:"0.56rem",letterSpacing:"0.32em",color:"rgba(255,255,255,0.14)",marginBottom:1}}>PHASE {frames.length>0?frameIdx+1:"-"}/{frames.length}</div>
             <div style={{fontSize:"1.01rem",fontWeight:700,color:tc,letterSpacing:"0.06em"}}>{frame?.label??"�"}</div>
           </motion.div>
         </AnimatePresence>
@@ -820,7 +821,7 @@ function MomentumLine({curve,color,label}:{curve:{minute:number;value:number}[];
   const sl=label.replace(/\s/g,"");
   return(
     <div style={{marginBottom:5}}>
-      <div style={{fontSize:"0.44rem",letterSpacing:"0.18em",color:"rgba(255,255,255,0.20)",marginBottom:3}}>{label}</div>
+      <div style={{fontSize:"0.62rem",letterSpacing:"0.18em",color:"rgba(255,255,255,0.20)",marginBottom:3}}>{label}</div>
       <svg width={W} height={H} style={{display:"block"}}>
         <defs><linearGradient id={`ml-${sl}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={`${color}28`}/><stop offset="100%" stopColor={`${color}03`}/></linearGradient></defs>
         <line x1={PAD} y1={PAD+plotH/2} x2={PAD+plotW} y2={PAD+plotH/2} stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" strokeDasharray="3 4"/>
@@ -833,18 +834,19 @@ function MomentumLine({curve,color,label}:{curve:{minute:number;value:number}[];
 
 // --- Radar --------------------------------------------------------------------
 function RadarChart({values,color}:{values:number[];color:string}){
-  const cx=52,cy=52,maxR=36,labels=["INF","DIS","INV","PRS","IMP"];
+  const cx=64,cy=64,maxR=46,labels=["INF","DIS","INV","PRS","IMP"];
   const ang=(i:number)=>-Math.PI/2+(i*Math.PI*2)/5;
   const pt=(v:number,i:number):[number,number]=>{const a=ang(i),r=(v/100)*maxR;return[cx+r*Math.cos(a),cy+r*Math.sin(a)];};
   const ringPath=(f:number)=>{const p=labels.map((_,i)=>{const a=ang(i),r=maxR*f;return`${cx+r*Math.cos(a)} ${cy+r*Math.sin(a)}`;});return`M ${p.join(" L ")} Z`;};
-  const dp=`M ${values.map((v,i)=>pt(v,i).join(" ")).join(" L ")} Z`,ak=values.join(",");
+  const safeVals=values.map(v=>Math.max(v,8));
+  const dp=`M ${safeVals.map((v,i)=>pt(v,i).join(" ")).join(" L ")} Z`,ak=safeVals.join(",");
   return(
-    <svg width="100" height="100" viewBox="0 0 104 104">
-      {[0.25,0.5,0.75,1].map(f=><path key={f} d={ringPath(f)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="0.7"/>)}
-      {labels.map((_,i)=>{const[x2,y2]=pt(100,i);return<line key={i} x1={cx} y1={cy} x2={x2} y2={y2} stroke="rgba(255,255,255,0.07)" strokeWidth="0.7"/>;} )}
-      <motion.path key={ak} d={dp} fill={`${color}28`} stroke={color} strokeWidth="1.5" initial={{pathLength:0,opacity:0}} animate={{pathLength:1,opacity:1}} transition={{pathLength:{duration:0.55,ease:"easeOut"},opacity:{duration:0.2}}}/>
-      {values.map((v,i)=>{const[x,y]=pt(v,i);return<motion.circle key={`${ak}-${i}`} cx={x} cy={y} r="2.2" fill={color} initial={{opacity:0,scale:0}} animate={{opacity:1,scale:1}} transition={{delay:0.3+i*0.04,duration:0.15}}/>;} )}
-      {labels.map((l,i)=>{const[x,y]=pt(118,i);return<text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.22)" fontSize="5.5" fontFamily="'Barlow Condensed',sans-serif">{l}</text>;} )}
+    <svg width="128" height="128" viewBox="0 0 128 128">
+      {[0.25,0.5,0.75,1].map(f=><path key={f} d={ringPath(f)} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="0.8"/>)}
+      {labels.map((_,i)=>{const[x2,y2]=pt(100,i);return<line key={i} x1={cx} y1={cy} x2={x2} y2={y2} stroke="rgba(255,255,255,0.10)" strokeWidth="0.8"/>;} )}
+      <motion.path key={ak} d={dp} fill={`${color}40`} stroke={color} strokeWidth="2" initial={{pathLength:0,opacity:0}} animate={{pathLength:1,opacity:1}} transition={{pathLength:{duration:0.55,ease:"easeOut"},opacity:{duration:0.2}}}/>
+      {safeVals.map((v,i)=>{const[x,y]=pt(v,i);return<motion.circle key={`${ak}-${i}`} cx={x} cy={y} r="3" fill={color} initial={{opacity:0,scale:0}} animate={{opacity:1,scale:1}} transition={{delay:0.3+i*0.04,duration:0.15}}/>;} )}
+      {labels.map((l,i)=>{const[x,y]=pt(120,i);return<text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.45)" fontSize="7" fontWeight="700" fontFamily="'Barlow Condensed',sans-serif">{l}</text>;} )}
     </svg>
   );
 }
@@ -940,7 +942,7 @@ function GraniteCompanion({event,myTeamName,oppName,tc,isMyTeamEvent}:{event?:Pi
       <div style={{flexShrink:0,padding:"4px 16px 13px",display:"flex",gap:7}}>
         <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handleSend();}}
           placeholder="What did this moment mean?"
-          style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,padding:"7px 11px",color:"rgba(255,255,255,0.62)",fontFamily:"inherit",fontSize:"0.68rem",outline:"none",letterSpacing:"0.02em"}}/>
+          style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:3,padding:"7px 11px",color:"rgba(255,255,255,0.62)",fontFamily:"inherit",fontSize:"0.80rem",outline:"none",letterSpacing:"0.02em"}}/>
         <button onClick={handleSend}
           style={{background:`${C_GRANITE}28`,border:`1px solid ${C_GRANITE}40`,borderRadius:3,padding:"7px 13px",cursor:"pointer",fontFamily:"inherit",fontSize:"0.57rem",letterSpacing:"0.14em",color:`${C_GRANITE}EE`,transition:"background 0.13s"}}
           onMouseEnter={e=>{e.currentTarget.style.background=`${C_GRANITE}3C`;}}
@@ -974,12 +976,12 @@ function FloatingEventCard({ event, frames, frameIdx, emotion, acRgb, acHex }:
   const rgb   = (h:string) => { const c=(h.replace("#","")+"000000").slice(0,6); return `${parseInt(c.slice(0,2),16)},${parseInt(c.slice(2,4),16)},${parseInt(c.slice(4,6),16)}`; };
   const eRgb  = rgb(col);
   return (
-    <div style={{ position:"absolute", bottom:48, left:8, width:196, background:"rgba(4,7,14,0.92)",
+    <div style={{ position:"absolute", bottom:24, left:8, width:196, background:"rgba(4,7,14,0.92)",
       backdropFilter:"blur(14px)", border:`1px solid rgba(${acRgb},0.18)`,
       borderLeft:`3px solid ${col}`, borderRadius:4, overflow:"hidden", zIndex:15 }}>
       <div style={{ padding:"5px 10px", background:`rgba(${eRgb},0.14)`, display:"flex", alignItems:"center", gap:6 }}>
         <div style={{ width:5, height:5, borderRadius:"50%", background:col, flexShrink:0 }}/>
-        <span style={{ fontSize:"0.44rem", letterSpacing:"0.20em", color:col, fontWeight:700 }}>
+        <span style={{ fontSize:"0.62rem", letterSpacing:"0.20em", color:col, fontWeight:700 }}>
           {emotion?.state ?? event.eventType.toUpperCase()} {event.minute}'
         </span>
       </div>
@@ -989,8 +991,8 @@ function FloatingEventCard({ event, frames, frameIdx, emotion, acRgb, acHex }:
           WebkitLineClamp:3, WebkitBoxOrient:"vertical" as any, overflow:"hidden" }}>{narr}</p>
       </div>
       <div style={{ padding:"4px 10px 7px", borderTop:"1px solid rgba(255,255,255,0.05)" }}>
-        <div style={{ fontSize:"0.34rem", letterSpacing:"0.20em", color:`rgba(${acRgb},0.70)`, marginBottom:2, fontWeight:700 }}>FROM THE STANDS</div>
-        <p style={{ fontSize:"0.52rem", lineHeight:1.56, color:"rgba(255,255,255,0.30)", margin:0, fontStyle:"italic",
+        <div style={{ fontSize:"0.41rem", letterSpacing:"0.20em", color:`rgba(${acRgb},0.70)`, marginBottom:2, fontWeight:700 }}>FROM THE STANDS</div>
+        <p style={{ fontSize:"0.62rem", lineHeight:1.56, color:"rgba(255,255,255,0.30)", margin:0, fontStyle:"italic",
           display:"-webkit-box" as any, WebkitLineClamp:3, WebkitBoxOrient:"vertical" as any, overflow:"hidden" }}>
           {frames[frameIdx]?.narration ?? ""}
         </p>
@@ -1166,7 +1168,7 @@ function EmotionCinema({ config, onDismiss }:{ config:CinemaConfig; onDismiss:()
         })}
       </AnimatePresence>
       <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:1.5, duration:0.6}}
-        style={{ position:"absolute", bottom:20, fontSize:"0.36rem", letterSpacing:"0.24em",
+        style={{ position:"absolute", bottom:20, fontSize:"0.43rem", letterSpacing:"0.24em",
           color:"rgba(255,255,255,0.22)" }}>
         TAP TO DISMISS
       </motion.div>
@@ -1420,6 +1422,8 @@ interface Props {
 
 // --- Main Component -----------------------------------------------------------
 export default function SupporterStoryScreen({ match, team, narrative, rawEvents, onBack }: Props) {
+  const router = useRouter();
+
   // -- Atmosphere --
   const myTeam  = team === "home" ? match.home.name : team === "away" ? match.away.name : match.home.name;
   const oppTeam = team === "home" ? match.away.name : team === "away" ? match.home.name : match.away.name;
@@ -1671,26 +1675,26 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
           <button onClick={onBack}
             style={{ background:"transparent", border:`1px solid rgba(${acRgb},0.25)`, borderRadius:3,
               padding:"4px 10px", cursor:"pointer", fontFamily:"inherit",
-              fontSize:"0.44rem", letterSpacing:"0.18em", color:"rgba(255,255,255,0.50)" }}>
+              fontSize:"0.62rem", letterSpacing:"0.18em", color:"rgba(255,255,255,0.50)" }}>
             ? BACK
           </button>
           <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
-            <span style={{ fontSize:"0.44rem", letterSpacing:"0.22em", color:"rgba(255,255,255,0.30)" }}>? {homeCode}</span>
-            <span style={{ fontSize:"0.34rem", letterSpacing:"0.12em", color:"rgba(255,255,255,0.18)" }}>{homeName}</span>
+            <span style={{ fontSize:"0.62rem", letterSpacing:"0.22em", color:"rgba(255,255,255,0.30)" }}>? {homeCode}</span>
+            <span style={{ fontSize:"0.41rem", letterSpacing:"0.12em", color:"rgba(255,255,255,0.18)" }}>{homeName}</span>
           </div>
         </div>
         <div style={{ textAlign:"center" }}>
           <div style={{ fontSize:"1.04rem", fontWeight:900, letterSpacing:"0.20em", color:"rgba(255,255,255,0.85)" }}>{scoreStr}</div>
-          <div style={{ fontSize:"0.36rem", letterSpacing:"0.28em", color:`rgba(${acRgb},0.65)`, marginTop:1 }}>SUPPORTER BOARD</div>
+          <div style={{ fontSize:"0.43rem", letterSpacing:"0.28em", color:`rgba(${acRgb},0.65)`, marginTop:1 }}>SUPPORTER BOARD</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:14, minWidth:180 }}>
           <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:1 }}>
-            <span style={{ fontSize:"0.44rem", letterSpacing:"0.22em", color:"rgba(255,255,255,0.30)" }}>{awayCode} ?</span>
-            <span style={{ fontSize:"0.34rem", letterSpacing:"0.12em", color:"rgba(255,255,255,0.18)" }}>{awayName}</span>
+            <span style={{ fontSize:"0.62rem", letterSpacing:"0.22em", color:"rgba(255,255,255,0.30)" }}>{awayCode} ?</span>
+            <span style={{ fontSize:"0.41rem", letterSpacing:"0.12em", color:"rgba(255,255,255,0.18)" }}>{awayName}</span>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:"0.39rem", letterSpacing:"0.14em", color:"rgba(255,255,255,0.24)" }}>{dateStr}</div>
-            <div style={{ fontSize:"0.34rem", letterSpacing:"0.14em", color:"rgba(255,255,255,0.16)" }}>{stageLabel}</div>
+            <div style={{ fontSize:"0.46rem", letterSpacing:"0.14em", color:"rgba(255,255,255,0.24)" }}>{dateStr}</div>
+            <div style={{ fontSize:"0.41rem", letterSpacing:"0.14em", color:"rgba(255,255,255,0.16)" }}>{stageLabel}</div>
           </div>
         </div>
       </div>
@@ -1705,11 +1709,11 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
           <div style={{ height:2, background:`linear-gradient(90deg, ${acHex}, rgba(${acRgb},0.08))`, flexShrink:0 }}/>
           <div style={{ flexShrink:0, padding:"10px 14px 9px", borderBottom:`1px solid rgba(${acRgb},0.12)` }}>
             <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:2 }}>
-              <div style={{ fontSize:"0.49rem", letterSpacing:"0.26em", color:`rgba(${acRgb},0.80)`, fontWeight:700 }}>MATCH STORY</div>
+              <div style={{ fontSize:"0.58rem", letterSpacing:"0.26em", color:`rgba(${acRgb},0.80)`, fontWeight:700 }}>MATCH STORY</div>
               <div style={{ background:acHex, borderRadius:2, padding:"0 6px", fontSize:"0.42rem", fontWeight:800,
                 color:"rgba(0,0,0,0.72)", lineHeight:"14px", flexShrink:0 }}>{filteredEvents.length}</div>
             </div>
-            <div style={{ fontSize:"0.39rem", letterSpacing:"0.12em", color:"rgba(255,255,255,0.22)", marginBottom:7 }}>
+            <div style={{ fontSize:"0.46rem", letterSpacing:"0.12em", color:"rgba(255,255,255,0.22)", marginBottom:7 }}>
               Chapter {activeEventIdx >= 0 ? activeEventIdx+1 : 1} of {filteredEvents.length}
             </div>
             <div style={{ display:"flex", gap:"1px" }}>
@@ -1733,15 +1737,15 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
                   <span style={{ color:"rgba(255,255,255,0.18)", fontSize:"0.57rem", minWidth:14, paddingTop:1, flexShrink:0 }}>{idx+1}</span>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:2 }}>
-                      <span style={{ fontSize:"0.68rem", flexShrink:0 }}>{EV_ICONS[ev.eventType] ?? "·"}</span>
-                      <span style={{ fontSize:"0.78rem", fontWeight:700,
+                      <span style={{ fontSize:"0.80rem", flexShrink:0 }}>{EV_ICONS[ev.eventType] ?? "·"}</span>
+                      <span style={{ fontSize:"0.92rem", fontWeight:700,
                         color:isActive?"rgba(255,255,255,0.90)":"rgba(255,255,255,0.50)",
                         whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:98 }}>
                         {ev.player??ev.playerIn??ev.team}
                       </span>
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                      <span style={{ fontSize:"0.52rem", color:"rgba(255,255,255,0.26)", fontWeight:700, flexShrink:0 }}>{ev.minute}'</span>
+                      <span style={{ fontSize:"0.62rem", color:"rgba(255,255,255,0.26)", fontWeight:700, flexShrink:0 }}>{ev.minute}'</span>
                       <span style={{ fontSize:"0.35rem", letterSpacing:"0.12em", fontWeight:700,
                         color:isActive?em.color:"rgba(255,255,255,0.22)",
                         background:isActive?`rgba(${acRgb},0.20)`:"transparent",
@@ -1759,35 +1763,61 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
         {/* CENTER: Pitch + Cinema */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", position:"relative", overflow:"hidden" }}>
 
-          {/* Center header: ? HOMECODE  MATCH BOARD  AWAYCODE ? */}
+          {/* Center header: ? HOMECODE  MATCH BOARD / EXPLORE  AWAYCODE ? */}
           <div style={{ flexShrink:0, height:32, display:"flex", alignItems:"center", justifyContent:"space-between",
             padding:"0 14px", background:`rgba(${acRgb},0.06)`, borderBottom:`1px solid ${atmo.borderCol}` }}>
-            <span style={{ fontSize:"0.47rem", letterSpacing:"0.18em", color:"rgba(255,255,255,0.45)", fontWeight:700 }}>? {homeCode}</span>
-            <span style={{ fontSize:"0.34rem", letterSpacing:"0.30em", color:"rgba(255,255,255,0.20)" }}>MATCH BOARD</span>
-            <span style={{ fontSize:"0.47rem", letterSpacing:"0.18em", color:"rgba(255,255,255,0.45)", fontWeight:700 }}>{awayCode} ?</span>
+            <span style={{ fontSize:"0.56rem", letterSpacing:"0.18em", color:"rgba(255,255,255,0.45)", fontWeight:700 }}>? {homeCode}</span>
+            {activeEvent ? (
+              <button
+                onClick={() => {
+                  const p = activeEvent.player ?? activeEvent.playerOut ?? activeEvent.playerIn ?? activeEvent.team ?? "";
+                  sessionStorage.setItem("supporter_matchId", match.id);
+                  sessionStorage.setItem("supporter_team", team);
+                  router.push(`/moment?matchId=${encodeURIComponent(match.id)}&eventId=${encodeURIComponent(activeEvent.id)}&minute=${activeEvent.minute}&player=${encodeURIComponent(p)}&type=${encodeURIComponent(activeEvent.eventType)}&team=${encodeURIComponent(team)}&lens=supporter`);
+                }}
+                style={{
+                  background:"#f0c028", border:"none", borderRadius:4,
+                  padding:"4px 14px", cursor:"pointer",
+                  fontFamily:"'Barlow Condensed', sans-serif",
+                  fontSize:"11px", letterSpacing:"0.18em", fontWeight:900,
+                  color:"#000", whiteSpace:"nowrap",
+                }}
+              >
+                EXPLORE MOMENT →
+              </button>
+            ) : (
+              <span style={{ fontSize:"0.41rem", letterSpacing:"0.30em", color:"rgba(255,255,255,0.20)" }}>MATCH BOARD</span>
+            )}
+            <span style={{ fontSize:"0.56rem", letterSpacing:"0.18em", color:"rgba(255,255,255,0.45)", fontWeight:700 }}>{awayCode} ?</span>
           </div>
 
-          {/* Event header: minute � player � emotion badge */}
+          {/* Event header: minute · player · emotion badge */}
           <AnimatePresence mode="wait">
             {activeEvent && (
               <motion.div key={`eh-${activeEvent.id}`}
                 initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0}}
                 transition={{duration:0.18}}
-                style={{ flexShrink:0, height:38, display:"flex", alignItems:"center", padding:"0 14px", gap:10,
-                  borderBottom:`1px solid ${atmo.borderCol}`, background:"rgba(0,0,0,0.18)" }}>
-                <span style={{ fontSize:"1.04rem", fontWeight:800, color:acHex, minWidth:28, letterSpacing:"0.02em",
-                  flexShrink:0 }}>{activeEvent.minute}'</span>
-                <span style={{ fontSize:"0.81rem", fontWeight:700, color:"rgba(255,255,255,0.78)", flex:1,
-                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  {activeEvent.player ?? activeEvent.playerIn ?? activeEvent.team}
-                </span>
-                {emotion && (
-                  <span style={{ fontSize:"0.32rem", letterSpacing:"0.16em", fontWeight:700, color:emotion.color,
-                    background:`${emotion.color}18`, border:`1px solid ${emotion.color}40`,
-                    borderRadius:2, padding:"2px 7px", flexShrink:0 }}>
-                    {emotion.state}
+                style={{ flexShrink:0, borderBottom:`1px solid ${atmo.borderCol}`,
+                  background:"rgba(0,0,0,0.22)" }}>
+
+                {/* Row 1: minute · player · emotion */}
+                <div style={{ display:"flex", alignItems:"center", padding:"0 10px", gap:8, height:36 }}>
+                  <span style={{ fontSize:"1.04rem", fontWeight:800, color:acHex, flexShrink:0, letterSpacing:"0.02em" }}>
+                    {activeEvent.minute}'
                   </span>
-                )}
+                  <span style={{ fontSize:"0.81rem", fontWeight:700, color:"rgba(255,255,255,0.78)",
+                    flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {activeEvent.player ?? activeEvent.playerIn ?? activeEvent.team}
+                  </span>
+                  {emotion && (
+                    <span style={{ fontSize:"0.55rem", letterSpacing:"0.10em", fontWeight:700, color:emotion.color,
+                      background:`${emotion.color}22`, border:`1px solid ${emotion.color}55`,
+                      borderRadius:3, padding:"3px 8px", flexShrink:0, whiteSpace:"nowrap" }}>
+                      {emotion.state}
+                    </span>
+                  )}
+                </div>
+
               </motion.div>
             )}
           </AnimatePresence>
@@ -1812,11 +1842,12 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
               <div style={{ position:"absolute", inset:0, zIndex:4, pointerEvents:"none",
                 background:atmo.ambientTint, mixBlendMode:"color" }}/>
             )}
-            {/* Floating event card � hidden during cinema */}
+            {/* Floating event card — hidden during cinema */}
             {activeEvent && !showCinema && (
               <FloatingEventCard event={activeEvent} frames={frames} frameIdx={frameIdx}
                 emotion={emotion} acRgb={acRgb} acHex={acHex}/>
             )}
+
             {/* CINEMA OVERLAY */}
             <AnimatePresence>
               {showCinema && cinemaConfig && (
@@ -1850,9 +1881,9 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
             </div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:"0.6rem", fontWeight:700, color:"rgba(255,255,255,0.78)", letterSpacing:"0.04em" }}>Supporter Companion</div>
-              <div style={{ fontSize:"0.34rem", color:"rgba(255,255,255,0.26)", letterSpacing:"0.08em" }}>PitchLens Guide � Powered by Granite</div>
+              <div style={{ fontSize:"0.41rem", color:"rgba(255,255,255,0.26)", letterSpacing:"0.08em" }}>PitchLens Guide � Powered by Granite</div>
             </div>
-            <div style={{ fontSize:"0.29rem", letterSpacing:"0.08em", color:"rgba(255,255,255,0.16)", flexShrink:0 }}>IBM Granite</div>
+            <div style={{ fontSize:"0.43rem", letterSpacing:"0.08em", color:"rgba(255,255,255,0.16)", flexShrink:0 }}>IBM Granite</div>
           </div>
 
           {/* Body: chat (left) + player sidebar (right) */}
@@ -1865,14 +1896,14 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
               {/* FROM THE STANDS � crowd narrative snippet */}
               <div style={{ flexShrink:0, padding:"9px 14px 8px", borderBottom:`1px solid ${atmo.borderCol}`,
                 minHeight:64, overflow:"hidden" }}>
-                <div style={{ fontSize:"0.29rem", letterSpacing:"0.22em", color:"rgba(255,255,255,0.20)", marginBottom:5, fontWeight:700 }}>FROM THE STANDS</div>
+                <div style={{ fontSize:"0.43rem", letterSpacing:"0.22em", color:"rgba(255,255,255,0.20)", marginBottom:5, fontWeight:700 }}>FROM THE STANDS</div>
                 <AnimatePresence mode="wait">
                   {emotion ? (
                     <motion.div key={`ns-${activeEvent?.id}`} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.20}}>
                       <div style={{ fontSize:"0.91rem", fontWeight:900, letterSpacing:"0.06em", lineHeight:1,
                         color:emotion.color, marginBottom:4, textShadow:`0 0 22px ${emotion.color}44` }}>{emotion.state}</div>
                       {crowdText && (
-                        <p style={{ fontSize:"0.49rem", lineHeight:1.65, color:"rgba(255,255,255,0.42)", margin:0,
+                        <p style={{ fontSize:"0.58rem", lineHeight:1.65, color:"rgba(255,255,255,0.42)", margin:0,
                           fontWeight:300, display:"-webkit-box" as any,
                           WebkitLineClamp:3, WebkitBoxOrient:"vertical" as any, overflow:"hidden" }}>
                           {crowdText.split("\n\n")[0]}
@@ -1881,7 +1912,7 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
                     </motion.div>
                   ) : (
                     <motion.p key="empty" initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.20}}
-                      style={{ fontSize:"0.49rem", lineHeight:1.65, color:"rgba(255,255,255,0.24)", margin:0, fontStyle:"italic" }}>
+                      style={{ fontSize:"0.58rem", lineHeight:1.65, color:"rgba(255,255,255,0.24)", margin:0, fontStyle:"italic" }}>
                       Select a moment to feel the match.
                     </motion.p>
                   )}
@@ -1898,7 +1929,7 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
 
               {/* Nation + player identity */}
               <div style={{ flexShrink:0, padding:"10px 10px 8px", borderBottom:`1px solid ${atmo.borderCol}` }}>
-                <div style={{ fontSize:"0.29rem", letterSpacing:"0.20em", color:`rgba(${acRgb},0.70)`, marginBottom:4, fontWeight:700 }}>
+                <div style={{ fontSize:"0.43rem", letterSpacing:"0.20em", color:`rgba(${acRgb},0.70)`, marginBottom:4, fontWeight:700 }}>
                   {atmo.sectionName.split(" ")[0]}
                 </div>
                 <AnimatePresence mode="wait">
@@ -1908,11 +1939,11 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
                         letterSpacing:"0.02em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                         {playerName.split(" ").slice(-1)[0]}
                       </div>
-                      <div style={{ fontSize:"0.36rem", color:"rgba(255,255,255,0.36)", letterSpacing:"0.06em", marginBottom:6, marginTop:1 }}>
+                      <div style={{ fontSize:"0.43rem", color:"rgba(255,255,255,0.36)", letterSpacing:"0.06em", marginBottom:6, marginTop:1 }}>
                         {playerName.split(" ").slice(0,-1).join(" ") || playerName}
                       </div>
                       {emotion && (
-                        <div style={{ fontSize:"0.29rem", letterSpacing:"0.12em", fontWeight:700, color:emotion.color,
+                        <div style={{ fontSize:"0.43rem", letterSpacing:"0.12em", fontWeight:700, color:emotion.color,
                           background:`${emotion.color}18`, border:`1px solid ${emotion.color}40`,
                           borderRadius:2, padding:"2px 6px", display:"inline-block" }}>
                           {emotion.state}
@@ -1922,7 +1953,7 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
                   ) : (
                     <motion.div key="no-player" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.18}}>
                       <div style={{ fontSize:"1.43rem", fontWeight:900, color:"rgba(255,255,255,0.65)", lineHeight:1 }}>{myCode}</div>
-                      <div style={{ fontSize:"0.36rem", color:`rgba(${acRgb},0.50)`, letterSpacing:"0.08em", marginTop:4 }}>{atmo.chant}</div>
+                      <div style={{ fontSize:"0.43rem", color:`rgba(${acRgb},0.50)`, letterSpacing:"0.08em", marginTop:4 }}>{atmo.chant}</div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1936,13 +1967,13 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
                   </div>
                   {([["INFLUENCE",playerProfile.stats.influence],["DISCIPLINE",playerProfile.stats.discipline],["IMPACT",playerProfile.stats.impact],["INVOLVEMENT",playerProfile.stats.involvement],["PRESSURE",playerProfile.stats.pressure]] as [string,number][]).map(([lbl,val])=>(
                     <div key={lbl} style={{ display:"flex", alignItems:"center", gap:4, marginBottom:3 }}>
-                      <span style={{ fontSize:"0.26rem", letterSpacing:"0.04em", color:"rgba(255,255,255,0.26)", width:46, flexShrink:0 }}>{lbl}</span>
+                      <span style={{ fontSize:"0.33rem", letterSpacing:"0.04em", color:"rgba(255,255,255,0.26)", width:46, flexShrink:0 }}>{lbl}</span>
                       <div style={{ flex:1, height:1.5, background:"rgba(255,255,255,0.07)", borderRadius:1 }}>
                         <motion.div animate={{width:`${val}%`}} initial={{width:0}}
                           transition={{duration:0.40,ease:[0.16,1,0.3,1]}}
                           style={{ height:"100%", background:acHex, borderRadius:1 }}/>
                       </div>
-                      <span style={{ fontSize:"0.49rem", fontWeight:800, color:acHex, width:14, textAlign:"right", flexShrink:0 }}>{val}</span>
+                      <span style={{ fontSize:"0.58rem", fontWeight:800, color:acHex, width:14, textAlign:"right", flexShrink:0 }}>{val}</span>
                     </div>
                   ))}
                 </div>
@@ -1951,7 +1982,7 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
               {/* IN THIS MATCH */}
               <div style={{ flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column" }}>
                 <div style={{ flexShrink:0, padding:"6px 10px 3px",
-                  fontSize:"0.26rem", letterSpacing:"0.18em", color:"rgba(255,255,255,0.20)", fontWeight:700 }}>
+                  fontSize:"0.33rem", letterSpacing:"0.18em", color:"rgba(255,255,255,0.20)", fontWeight:700 }}>
                   IN THIS MATCH
                 </div>
                 <div style={{ flex:1, overflowY:"auto", scrollbarWidth:"none", padding:"0 10px 6px" }}>
@@ -1965,7 +1996,7 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
                         cursor:"pointer", fontFamily:"inherit", textAlign:"left",
                         borderLeft:"none", borderRight:"none", borderTop:"none" }}>
                       <span style={{ fontSize:"0.42rem", fontWeight:700, color:`rgba(${acRgb},0.72)`, minWidth:18, flexShrink:0 }}>{e.minute}'</span>
-                      <span style={{ fontSize:"0.29rem", letterSpacing:"0.06em", color:evColor(e.eventType,e.teamColor),
+                      <span style={{ fontSize:"0.43rem", letterSpacing:"0.06em", color:evColor(e.eventType,e.teamColor),
                         textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
                         {e.eventType.replace(/_/g," ")}
                       </span>
@@ -1982,6 +2013,8 @@ export default function SupporterStoryScreen({ match, team, narrative, rawEvents
           </div>
         </div>
       </div>
+
+
     </motion.div>
   );
 }

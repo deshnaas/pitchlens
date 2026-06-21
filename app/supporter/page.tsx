@@ -17,6 +17,7 @@ import AllegianceScene                       from "@/components/supporter/Allegi
 import type { SupporterTeam }               from "@/components/supporter/SupporterStoryScreen";
 import { MATCH_META, ALL_MATCHES, ALL_MATCHES as RAW } from "@/lib/matchData";
 import { MATCH_NARRATIVES }                  from "@/lib/matchNarratives";
+import FlagImg                               from "@/components/ui/FlagImg";
 
 // ─── Match catalogue — emotional story hooks ───────────────────────────────────
 // Same six matches as Referee. Different framing: not chapters, but memories.
@@ -61,7 +62,7 @@ const MATCHES: {
     floatDelay: 1.5,
   },
   {
-    id       : "portugal-ghana",
+    id       : "ghana-portugal",
     storyHook: "Five goals. Pure chaos.",
     scoreline: "3 – 2",
     featured : false,
@@ -88,6 +89,19 @@ export default function SupporterPage() {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedTeam,    setSelectedTeam]    = useState<SupporterTeam | null>(null);
   const [visitedWorld,    setVisitedWorld]    = useState(false);
+
+  // Restore match + team when returning from MomentViewer BACK button
+  useEffect(() => {
+    const savedMatch = sessionStorage.getItem("supporter_matchId");
+    const savedTeam  = sessionStorage.getItem("supporter_team") as SupporterTeam | null;
+    if (savedMatch && savedTeam) {
+      setSelectedMatchId(savedMatch);
+      setSelectedTeam(savedTeam);
+      setPhase("experience");
+      setVisitedWorld(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Phase: allegiance — choose your side
   if (phase === "allegiance" && selectedMatchId) {
@@ -528,6 +542,9 @@ function MemoryCard({ match, meta, isHovered, isEntering, onHover, onSelect }: {
         }}>
           {/* Home */}
           <div style={{ flex: 1, textAlign: "left" }}>
+            <div style={{ marginBottom: 4 }}>
+              <FlagImg code={meta.home.flagCode} size={match.featured ? 28 : 22} />
+            </div>
             <div style={{
               fontSize     : match.featured ? "1.9rem" : "1.5rem",
               fontWeight   : 900,
@@ -569,6 +586,9 @@ function MemoryCard({ match, meta, isHovered, isEntering, onHover, onSelect }: {
 
           {/* Away */}
           <div style={{ flex: 1, textAlign: "right" }}>
+            <div style={{ marginBottom: 4 }}>
+              <FlagImg code={meta.away.flagCode} size={match.featured ? 28 : 22} />
+            </div>
             <div style={{
               fontSize     : match.featured ? "1.9rem" : "1.5rem",
               fontWeight   : 900,

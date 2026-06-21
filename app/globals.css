@@ -80,3 +80,8 @@ body {
 }
 
 .lens-glow { animation: pulse-glow 3s ease-in-out infinite; }
+
+@keyframes pitchlens-pulse {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50%       { opacity: 0.80; transform: translateY(-3px); }
+}

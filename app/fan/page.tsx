@@ -16,6 +16,7 @@ import { useRouter }                         from "next/navigation";
 import { motion, AnimatePresence }           from "framer-motion";
 import FanStoryScreen                        from "@/components/fan/FanStoryScreen";
 import { MATCH_META, ALL_MATCHES }           from "@/lib/matchData";
+import FlagImg                               from "@/components/ui/FlagImg";
 import { MATCH_NARRATIVES }                  from "@/lib/matchNarratives";
 
 // ─── Match positions — elliptical formation around the ring ───────────────────
@@ -24,7 +25,7 @@ const MATCHES = [
   { id: "iran-usa",        pos: { left: "20%",  top: "38%" }, featured: false, floatDelay: 0.6 },
   { id: "germany-japan",   pos: { left: "80%",  top: "38%" }, featured: false, floatDelay: 1.1 },
   { id: "belgium-croatia", pos: { left: "20%",  top: "65%" }, featured: false, floatDelay: 1.6 },
-  { id: "portugal-ghana",  pos: { left: "80%",  top: "65%" }, featured: false, floatDelay: 2.1 },
+  { id: "ghana-portugal",  pos: { left: "80%",  top: "65%" }, featured: false, floatDelay: 2.1 },
   { id: "england-wales",   pos: { left: "50%",  top: "83%" }, featured: false, floatDelay: 2.6 },
 ];
 
@@ -38,6 +39,17 @@ export default function FanPage() {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [visitedWorld,    setVisitedWorld]    = useState(false);
 
+  // Restore match state when returning from MomentViewer back button
+  useEffect(() => {
+    const saved = sessionStorage.getItem("fan_matchId");
+    if (saved) {
+      setSelectedMatchId(saved);
+      setAppPhase("investigate");
+      setVisitedWorld(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (appPhase === "investigate" && selectedMatchId) {
     const narrative = MATCH_NARRATIVES[selectedMatchId];
     const meta      = MATCH_META[selectedMatchId];
@@ -49,7 +61,10 @@ export default function FanPage() {
           moments={narrative.moments}
           rawEvents={ALL_MATCHES[selectedMatchId] ?? []}
           narrative={narrative.narrative}
-          onBack={() => setAppPhase("select")}
+          onBack={() => {
+            sessionStorage.removeItem("fan_matchId");
+            setAppPhase("select");
+          }}
         />
       );
     }
@@ -485,6 +500,9 @@ function MemoryPortal({
           padding    : "4px 0",
         }}>
           <div style={{ flex: 1 }}>
+            <div style={{ marginBottom: 4 }}>
+              <FlagImg code={meta.home.flagCode} size={match.featured ? 28 : 22} />
+            </div>
             <div style={{
               fontSize  : match.featured ? "1.80rem" : "1.42rem",
               fontWeight: 900,
@@ -517,6 +535,9 @@ function MemoryPortal({
           </div>
 
           <div style={{ flex: 1, textAlign: "right" }}>
+            <div style={{ marginBottom: 4 }}>
+              <FlagImg code={meta.away.flagCode} size={match.featured ? 28 : 22} />
+            </div>
             <div style={{
               fontSize  : match.featured ? "1.80rem" : "1.42rem",
               fontWeight: 900,
