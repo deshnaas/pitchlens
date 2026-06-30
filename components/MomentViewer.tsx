@@ -777,7 +777,7 @@ const GraniteCoach = memo(function GraniteCoach({
           frameLabel: q,
           frameWhy : getCoachFallback(moment, q),
           score    : `${moment.minute}′`,
-          mode     : "fan_coach",
+          mode     : lens === "fan" ? "fan_coach" : lens === "supporter" ? "supporter" : "referee",
           question : q,
         }),
       });
@@ -968,7 +968,7 @@ const GraniteCoach = memo(function GraniteCoach({
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key==="Enter") handleSend(); }}
+          onKeyDown={e => { e.stopPropagation(); if (e.key==="Enter") handleSend(); }}
           placeholder="Ask anything about this moment…"
           style={{
             flex:1, background:"rgba(255,255,255,0.05)",
