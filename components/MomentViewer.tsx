@@ -738,8 +738,8 @@ const POV_QUICK_QUESTIONS = [
 ];
 
 const GraniteCoach = memo(function GraniteCoach({
-  moment, povPlayerLabel,
-}: { moment: MomentData; povPlayerLabel?: string }) {
+  moment, povPlayerLabel, matchKey, supporterTeam, lens,
+}: { moment: MomentData; povPlayerLabel?: string; matchKey: string; supporterTeam?: string; lens?: string }) {
   const [msgs,     setMsgs]     = useState<CoachMsg[]>([]);
   const [input,    setInput]    = useState("");
   const [loading,  setLoading]  = useState(false);
@@ -769,16 +769,17 @@ const GraniteCoach = memo(function GraniteCoach({
         headers:{"Content-Type":"application/json"},
         signal : ctrl.signal,
         body   : JSON.stringify({
-          matchId  : moment.event_uuid.slice(0,8),
-          eventType: moment.event_type,
-          player   : moment.player,
-          team     : moment.team,
-          minute   : String(moment.minute),
-          frameLabel: q,
-          frameWhy : getCoachFallback(moment, q),
-          score    : `${moment.minute}′`,
-          mode     : lens === "fan" ? "fan_coach" : lens === "supporter" ? "supporter" : "referee",
-          question : q,
+          matchId      : matchKey,
+          eventType    : moment.event_type,
+          player       : moment.player,
+          team         : moment.team,
+          supporterTeam: supporterTeam ?? "",
+          minute       : String(moment.minute),
+          frameLabel   : q,
+          frameWhy     : getCoachFallback(moment, q),
+          score        : `${moment.minute}′`,
+          mode         : lens === "fan" ? "fan_coach" : lens === "supporter" ? "supporter" : "referee",
+          question     : q,
         }),
       });
       const data = await res.json();
@@ -1565,7 +1566,7 @@ export default function MomentViewer({
 
         {/* Granite Coach — full height for all lenses */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", minHeight:0 }}>
-          <GraniteCoach moment={activeMoment} povPlayerLabel={cameraMode === "pov" ? povPlayerLabel : undefined} />
+          <GraniteCoach moment={activeMoment} povPlayerLabel={cameraMode === "pov" ? povPlayerLabel : undefined} matchKey={matchKey} supporterTeam={team} lens={lens} />
         </div>
 
         <div style={{ flex:1 }} />
