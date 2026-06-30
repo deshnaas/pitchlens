@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+
+  # ── Langflow ────────────────────────────────────────────────────────────────
+  langflow:
+    image: langflowai/langflow:1.10.0
+    container_name: pitchlens-langflow
+    restart: unless-stopped
+    environment:
+      LANGFLOW_AUTO_LOGIN: "true"
+      LANGFLOW_SKIP_AUTH_AUTO_LOGIN: "true"
+    ports:
+      - "7860:7860"
+    volumes:
+      - langflow_data:/app/langflow
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # ── PitchLens Backend (FastAPI + IBM Docling) ────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pitchlens-backend
+    restart: unless-stopped
+    depends_on:
+      langflow:
+        condition: service_healthy
+    environment:
+      LANGFLOW_URL: http://langflow:7860
+      LANGFLOW_FLOW_ID: ${LANGFLOW_FLOW_ID}
+      LANGFLOW_API_KEY: ${LANGFLOW_API_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/pdfs:/app/pdfs        # mount FIFA rules PDFs here
+      - ./backend/parsed:/app/parsed    # Docling cache persists here
+
+volumes:
+  langflow_data:
